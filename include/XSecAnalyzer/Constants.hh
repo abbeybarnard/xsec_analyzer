@@ -46,12 +46,14 @@ constexpr int RES_INTERACTION = 1;
 
 // Useful PDG codes
 constexpr int ELECTRON_NEUTRINO = 12;
+constexpr int ELECTRON_ANTINEUTRINO = -12; // Defined this for easier use in my analysis!
 constexpr int MUON = 13;
 constexpr int MUON_NEUTRINO = 14;
 constexpr int TAU_NEUTRINO = 16;
 constexpr int PROTON = 2212;
 constexpr int PI_ZERO = 111;
 constexpr int PI_PLUS = 211;
+constexpr int PI_MINUS = -211;
 
 // Values of parameters to use in analysis cuts
 constexpr float DEFAULT_PROTON_PID_CUT = 0.2;
@@ -77,3 +79,4 @@ constexpr double NEUTRON_MASS = 0.93956541; // GeV
 constexpr double PROTON_MASS = 0.93827208; // GeV
 constexpr double MUON_MASS = 0.10565837; // GeV
 constexpr double PI_PLUS_MASS = 0.13957000; // GeV
+constexpr double PI_MINUS_MASS = 0.13957000; // GeV

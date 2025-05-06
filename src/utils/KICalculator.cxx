@@ -3,6 +3,7 @@
 // Steven Gardiner <gardiner@fnal.gov>
 #include "XSecAnalyzer/Functions.hh"
 #include "XSecAnalyzer/KICalculator.hh"
+#include <stdexcept>
 
 namespace {
 

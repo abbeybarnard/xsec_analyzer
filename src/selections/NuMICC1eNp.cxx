@@ -1,18 +1,22 @@
 // XSecAnalyzer includes
 #include "XSecAnalyzer/FiducialVolume.hh"
 #include "XSecAnalyzer/Functions.hh"
-#include "XSecAnalyzer/Selections/NuMICC1e.hh"
 #include "XSecAnalyzer/TreeUtils.hh"
 
-NuMICC1e::NuMICC1e() : SelectionBase( "NuMICC1e" ) {
+#include "XSecAnalyzer/Selections/NuMICC1eNp.hh"
+
+NuMICC1eNp::NuMICC1eNp() : SelectionBase( "NuMICC1eNp" ) {
   // FV definition as in PeLEE analysis
   // x_min, x_max, y_min, y_max, z_min, z_max
-  this->define_fv( 10., 246., -105., 105., 10., 1026. );
+  // Have matched this up with what Katrina used.
+  this->define_fv( 10., 246., -106., 106., 10., 1026. );
 }
 
-std::string NuMICC1e::categorize_event( AnalysisEvent& ev ) {
+// This is the signal definition.
+std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
 
-  int nu_pdg, ccnc, npi0, nelec;
+  // Remember to add things here! These are the variables we use.
+  int nu_pdg, ccnc, npi0, nelec, swtrig_pre, nslice;
   float nu_x, nu_y, nu_z, Ee;
   const auto& in = ev.in();
   in.at( "nu_pdg" ) >> nu_pdg;
@@ -23,12 +27,63 @@ std::string NuMICC1e::categorize_event( AnalysisEvent& ev ) {
   in.at( "true_nu_vtx_x" ) >> nu_x;
   in.at( "true_nu_vtx_y" ) >> nu_y;
   in.at( "true_nu_vtx_z" ) >> nu_z;
+  in.at( "swtrig_pre" ) >> swtrig_pre;
+  in.at( "nslice" ) >> nslice;
 
+  // This is the proton selection stuff
+  std::vector< int >* nu_daughter_pdg;
+  std::vector< float > *nu_daughter_energy, *nu_daughter_px,
+    *nu_daughter_py, *nu_daughter_pz;
+
+  in.at( "mc_pdg" ) >> nu_daughter_pdg;
+  in.at( "mc_E" ) >> nu_daughter_energy;
+  in.at( "mc_px" ) >> nu_daughter_px;
+  in.at( "mc_py" ) >> nu_daughter_py;
+  in.at( "mc_pz" ) >> nu_daughter_pz;
+
+  int num_p_in_energy_range = 0;
+  double energy_lead_p = 0.;
+  bool has_pions = false;
+
+  for ( size_t p = 0u; p < nu_daughter_pdg->size(); ++p ) {
+    int pdg = nu_daughter_pdg->at( p );
+    float energy = nu_daughter_energy->at( p );
+
+    // Requires events to have at least one proton with energy > 40 MeV
+    if ( pdg == PROTON ) {
+      if ( energy - PROTON_MASS > 0.040 ) {
+        ++num_p_in_energy_range;
+        if ( energy > energy_lead_p ) {
+          energy_lead_p = energy;
+        }
+      }
+    }
+
+    // Requires events to have no neutral pions
+    else if ( pdg == PI_ZERO ) {
+      has_pions = true;
+    }
+    
+    // Requires events to have no charged pions with energy > 40 MeV
+    else if ( std::abs(pdg) == PI_MINUS ) {
+      if ( energy - PI_MINUS_MASS > 0.040 ) {
+        has_pions = true;
+      }
+    }
+
+    // Requires events to have no charged pions with energy > 40 MeV
+    else if ( std::abs(pdg) == PI_PLUS ) {
+      if ( energy - PI_PLUS_MASS > 0.040 ) {
+        has_pions = true;
+      }
+    }
+  }
+  
   // Require signal events to be inside the true fiducial volume
   bool sig_inFV = this->get_fv().is_inside( nu_x, nu_y, nu_z );
 
-  // Require an incident electron (anti)neutrino
-  bool sig_isNuE = ( std::abs( nu_pdg ) == ELECTRON_NEUTRINO );
+  // Require an incident electron neutrino - no electron antineutrinos here!
+  bool sig_isNuE = (nu_pdg == ELECTRON_NEUTRINO);
 
   // Require a charged-current interaction
   bool sig_isCC = ( ccnc == CHARGED_CURRENT );
@@ -36,8 +91,11 @@ std::string NuMICC1e::categorize_event( AnalysisEvent& ev ) {
   // Require a final-state electron above threshold
   bool sig_has_fs_electron = ( nelec > 0 ); // 30 MeV threshold
 
-  bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron;
+  // Requires signal events to pass the software trigger and have only one slice
+  bool passes_software_trigger = ( swtrig_pre == 1 && nslice == 1);
 
+  // This is the total signal definition with everything in it
+  bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron && passes_software_trigger;
 
   // Evaluate the true kinematic variables of interest
   float mc_electron_energy = BOGUS;
@@ -52,35 +110,54 @@ std::string NuMICC1e::categorize_event( AnalysisEvent& ev ) {
   out[ "mc_is_CC" ] = sig_isCC;
   out[ "mc_vertex_in_FV" ] = sig_inFV;
   out[ "mc_has_fs_electron" ] = sig_has_fs_electron;
+  out[ "mc_passes_software_trigger" ] = passes_software_trigger;
   out[ "mc_is_signal" ] = is_signal;
   out[ "mc_electron_energy" ] = mc_electron_energy;
 
+  // This is where we categorize the events!
   // All events outside of the true fiducial volume should be categorized
   // as "out of fiducial volume"
-  if ( !sig_inFV ) return "OOFV";
-  // NC categories
-  else if ( !sig_isCC ) {
-    if ( npi0 > 0 ) return "NC #pi^{0}";
-    else return "NC Other";
+  
+  // Events that are not within the FV
+  if ( !sig_inFV ) return "Out FV";
+
+  // CC electron neutrinos - where our signal events live
+  else if ( sig_isNuE && sig_isCC ) {
+    // Signal electron neutrinos
+    if ( is_signal ) return "#nu_{e} CC0#piNp";
+    // Non-signal electron neutrinos
+    else return "#nu_{e} CC other";
   }
+  
+  // CC electron antineutrino events
+  else if ( nu_pdg == ELECTRON_ANTINEUTRINO && sig_isCC && sig_inFV && passes_software_trigger ) {
+    return "#bar{#nu}_{e} CC0#piNp";
+  }
+
   // CC muon (anti)neutrinos
-  else if ( std::abs( nu_pdg ) == MUON_NEUTRINO ) {
+  else if ( std::abs( nu_pdg ) == MUON_NEUTRINO && sig_isCC ) {
     if ( npi0 > 0 ) return "#nu_{#mu} CC #pi^{0}";
-    else return "#nu_{#mu} CC Other";
+    else return "#nu_{#mu} CC"; // Was originally "Other" at the end.
   }
-  // CC electron (anti)neutrinos
-  else if ( sig_isNuE ) {
-    // signal events
-    if ( is_signal ) return "#nu_{e} CC Signal";
-    // non-signal nues
-    else return "#nu_{e} CC Other";
+
+  // NC muon (anti)neutrinos
+  else if (std::abs(nu_pdg) == MUON_NEUTRINO && !sig_isCC) {
+    if (npi0 > 0) return "#nu_{#mu} NC #pi^{0}";
+    else return "#nu_{#mu} NC";
   }
+
+  // NC electron neutrinos
+  else if (nu_pdg == ELECTRON_NEUTRINO && !sig_isCC) {
+    return "#nu_{e} NC";
+  }
+ 
   // We shouldn't ever get here, but return "Unknown" just in case
   std::cout << "Warning: Unknown event! Check the categorization logic.\n";
   return "Unknown";
 }
 
-bool NuMICC1e::is_selected( AnalysisEvent& ev ) {
+// This is more where the selection is.
+bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   // Get access to the reco information needed to apply the selection
   const auto& in = ev.in();
