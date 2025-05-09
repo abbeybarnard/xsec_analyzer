@@ -41,8 +41,8 @@ counter=0
 # Loop over each input file
 for file in "${input_files[@]}"
 do
-    input_file_name=$( echo $file | awk '{print $1}' )
-    input_file_type=$( echo $file | awk '{print $2}' )
+    input_file_name=$( echo $file | awk '{print $0}' )
+    input_file_type=$( echo $file | awk '{print $1}' )
     output_file_name="${output_dir}/xsec-ana-$(basename ${input_file_name})"
     echo "Starting file:"${counter}"/"${total_files}
     echo "Input file name: "${input_file_name}
