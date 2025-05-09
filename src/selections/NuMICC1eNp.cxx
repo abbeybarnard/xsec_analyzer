@@ -16,7 +16,7 @@ NuMICC1eNp::NuMICC1eNp() : SelectionBase( "NuMICC1eNp" ) {
 std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
 
   // Remember to add things here! These are the variables we use.
-  int nu_pdg, ccnc, npi0, nelec, swtrig_pre, nslice;
+  int nu_pdg, ccnc, npi0, nelec;
   float nu_x, nu_y, nu_z, Ee;
   const auto& in = ev.in();
   in.at( "nu_pdg" ) >> nu_pdg;
@@ -27,8 +27,6 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   in.at( "true_nu_vtx_x" ) >> nu_x;
   in.at( "true_nu_vtx_y" ) >> nu_y;
   in.at( "true_nu_vtx_z" ) >> nu_z;
-  in.at( "swtrig_pre" ) >> swtrig_pre;
-  in.at( "nslice" ) >> nslice;
 
   // This is the proton selection stuff
   std::vector< int >* nu_daughter_pdg;
@@ -91,11 +89,8 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   // Require a final-state electron above threshold
   bool sig_has_fs_electron = ( nelec > 0 ); // 30 MeV threshold
 
-  // Requires signal events to pass the software trigger and have only one slice
-  bool passes_software_trigger = ( swtrig_pre == 1 && nslice == 1);
-
-  // This is the total signal definition with everything in it
-  bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron && passes_software_trigger;
+  // This is the total signal definition with everything in it - originally missed the proton and pion cuts
+  bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron && (num_p_in_energy_range > 0) && (!has_pions);
 
   // Evaluate the true kinematic variables of interest
   float mc_electron_energy = BOGUS;
@@ -110,9 +105,11 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   out[ "mc_is_CC" ] = sig_isCC;
   out[ "mc_vertex_in_FV" ] = sig_inFV;
   out[ "mc_has_fs_electron" ] = sig_has_fs_electron;
-  out[ "mc_passes_software_trigger" ] = passes_software_trigger;
   out[ "mc_is_signal" ] = is_signal;
+  out[ "num_p_in_energy_range" ] = num_p_in_energy_range;
+  out[ "has_pions" ] = has_pions;
   out[ "mc_electron_energy" ] = mc_electron_energy;
+  out[ "energy_lead_p" ] = energy_lead_p;
 
   // This is where we categorize the events!
   // All events outside of the true fiducial volume should be categorized
@@ -121,34 +118,30 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   // Events that are not within the FV
   if ( !sig_inFV ) return "Out FV";
 
-  // CC electron neutrinos - where our signal events live
-  else if ( sig_isNuE && sig_isCC ) {
-    // Signal electron neutrinos
-    if ( is_signal ) return "#nu_{e} CC0#piNp";
-    // Non-signal electron neutrinos
-    else return "#nu_{e} CC other";
-  }
-  
-  // CC electron antineutrino events
-  else if ( nu_pdg == ELECTRON_ANTINEUTRINO && sig_isCC && sig_inFV && passes_software_trigger ) {
-    return "#bar{#nu}_{e} CC0#piNp";
+  // The two NC categories
+  else if ( !sig_isCC ) {
+    if ( npi0 > 0 ) return "NC #pi^{0}";
+    else return "NC Other";
   }
 
   // CC muon (anti)neutrinos
-  else if ( std::abs( nu_pdg ) == MUON_NEUTRINO && sig_isCC ) {
+  else if ( std::abs( nu_pdg ) == MUON_NEUTRINO ) {
     if ( npi0 > 0 ) return "#nu_{#mu} CC #pi^{0}";
-    else return "#nu_{#mu} CC"; // Was originally "Other" at the end.
+    else return "#nu_{#mu} CC Other";
   }
 
-  // NC muon (anti)neutrinos
-  else if (std::abs(nu_pdg) == MUON_NEUTRINO && !sig_isCC) {
-    if (npi0 > 0) return "#nu_{#mu} NC #pi^{0}";
-    else return "#nu_{#mu} NC";
+  // CC electron antineutrinos
+  else if ( nu_pdg  == ELECTRON_ANTINEUTRINO ) {
+    if ( npi0 > 0 ) return "#bar{#nu}_{e} CC0#piNp";
+    else return "#bar{#nu}_{e} CC Other";
   }
 
-  // NC electron neutrinos
-  else if (nu_pdg == ELECTRON_NEUTRINO && !sig_isCC) {
-    return "#nu_{e} NC";
+  // CC electron neutrinos - where our signal events live
+  else if ( sig_isNuE ) {
+    // signal events
+    if ( is_signal ) return "#nu_{e} CC0#piNp";
+    // non-signal nues
+    else return "#nu_{e} CC Other";
   }
  
   // We shouldn't ever get here, but return "Unknown" just in case

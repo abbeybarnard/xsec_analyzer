@@ -9,10 +9,10 @@
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_reweighted_fakeweights.root onBNB
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_nue_reweighted_fakeweights.root nueMC
 
-# Run 4b RHC CV MC
-/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/reweightedPPFX_numi_nue_overlay_pion_ntuples_run1_fhc_test_updated_map.root nueMC
-/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/reweightedPPFX_numi_nu_overlay_pion_ntuples_run1_fhc_updated_map.root numuMC
-/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_dirt_overlay_pion_ntuples_run1_fhc_fakeweights.root dirtMC
+# Run 1 FHC CV MC
+/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_nue_run1.root nueMC
+/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_nu_run1.root numuMC
+/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_dirt_run1.root dirtMC
 
 # Run 4b RHC Detvars
 # These have 'nueDV' at the end
