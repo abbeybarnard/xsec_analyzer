@@ -1,15 +1,38 @@
-# Format: file_name run file_type [triggers POT (for data only)]
+# file_name run file_type [triggers POT (for data only)]
+# Full beam-on data
+#/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-neutrinoselection_filt_run1_beamon_beamgood_v5.root 1 onBNB 5268051 2e+20
+
+# "Fake" beam-on data
+/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-numi_nue_run1_fake.root 1 onBNB 5268051 2e+20
+
+# Fake data
+# Genie (Closure)
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-reweightedPPFX_numi_nue_overlay_pion_ntuples_run1_fhc_test_updated_map_fake.root 1 onBNB 58432097 1.25378e+22
+
+# NuWro (FDS)
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nuwro_overlay_pion_ntuples_run1_fhc_reweighted_fakeweights.root 1 onBNB 5748692 6.65042e20
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nuwro_overlay_pion_ntuples_run1_fhc_nue_reweighted_fakeweights.root 1 onBNB 5748692 1.70906e+22
+
 # Beam-off data
-/exp/uboone/data/users/gardiner/fnal-retreat/xsec-ana-MCC9.10_Test_Samples_v10_04_07_03_Run4b_pandora_standalone_reco2_BNB_beam_off_reco2_ana_goodruns.root 4 extBNB 27868945 0
-#
-# Beam-on data
-/exp/uboone/data/users/gardiner/fnal-retreat/xsec-ana-MCC9.10_Test_Samples_v10_04_07_03_Run4b_pandora_standalone_reco2_BNB_beam_on_reco2_ana_goodruns.root 4 onBNB 9515547 3.92e19
-#
-# Dirt MC
-/exp/uboone/data/users/gardiner/fnal-retreat/xsec-ana-MCC9.10_Test_Samples_v10_04_07_04_Run4b_pandora_standalone_reco2_BNB_dirt_reco2_ana.root 4 dirtMC
-#
-# Intrinsic nue MC
-/exp/uboone/data/users/gardiner/fnal-retreat/xsec-ana-MCC9.10_Test_Samples_v10_04_07_04_Run4b_pandora_standalone_reco2_BNB_nue_overlay_reco2_ana.root 4 nueMC
-#
-# numu MC
-/exp/uboone/data/users/gardiner/fnal-retreat/xsec-ana-MCC9.10_Test_Samples_v10_04_07_04_Run4b_pandora_standalone_reco2_BNB_nu_overlay_reco2_ana.root 4 numuMC
+/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-neutrinoselection_filt_run1_beamoff_v5.root 1 9199233 0
+
+# Intrinsic nue MC samples
+/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-numi_nue_run1.root 1 nueMC
+
+# numu MC samples
+/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-numi_nu_run1.root 1 numuMC
+
+# Dirt MC samples
+/exp/uboone/app/users/abarnard/my_analyses/xsec_analyzer/test/xsec-ana-numi_dirt_run1.root 1 dirtMC
+
+# detVar MC samples
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_CV_full_split_reweightedPPFX_updated_map.root 1 detVarCV
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_LYDown_slim_split_reweightedPPFX_fakeweights.root 1 detVarLYdown
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_LYRayleigh_slim_split_reweightedPPFX_fakeweights.root 1 detVarLYrayl
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_LYAttenuation_slim_split_reweightedPPFX_fakeweights.root 1 detVarLYatten
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_Recombination_slim_split_reweightedPPFX_fakeweights.root 1 detVarRecomb2
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_SCE_slim_split_reweightedPPFX_fakeweights.root 1 detVarSCE
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_WireModX_slim_split_reweightedPPFX_fakeweights.root 1 detVarWMX
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_WireModYZ_slim_split_reweightedPPFX_fakeweights.root 1 detVarWMYZ
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_WireModThetaXZ_slim_split_reweightedPPFX_fakeweights.root 1 detVarWMAngleXZ
+#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/xsec-ntuples/xsec-ana-numi_nue_detvars_pion_ntuples_run1_fhc_WireModThetaYZ_slim_split_reweightedPPFX_fakeweights.root 1 detVarWMAngleYZ

@@ -99,13 +99,13 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   bool has_true_electron = ( sig_isNuE && sig_isCC );
   if ( has_true_electron ) mc_electron_energy = Ee;
 
-  // Save truth information to the output TTree
+  // Save TRUTH information to the output TTree
   auto& out = ev.out();
   out[ "mc_is_nue" ] = sig_isNuE;
   out[ "mc_is_CC" ] = sig_isCC;
   out[ "mc_vertex_in_FV" ] = sig_inFV;
   out[ "mc_has_fs_electron" ] = sig_has_fs_electron;
-  out[ "mc_is_signal" ] = is_signal;
+  out[ "mc_is_signal" ] = is_signal; // This is true total signal!
   out[ "num_p_in_energy_range" ] = num_p_in_energy_range;
   out[ "has_pions" ] = has_pions;
   out[ "mc_electron_energy" ] = mc_electron_energy;
@@ -154,16 +154,17 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   // Get access to the reco information needed to apply the selection
   const auto& in = ev.in();
-  unsigned int shr_id;
-  int nslice, n_showers, n_tracks;
+  unsigned int shr_id, n_tracks_contained, n_showers_contained; // This is the one that is "i" compared to "I"
+  int nslice, n_showers, n_tracks, swtrig_pre;
   float nu_vx, nu_vy, nu_vz, contained_frac, topo_score,
-    cosmic_ip, shr_energy_cali, shr_score, hits_ratio, shrmoliereavg,
-    shr_tkfit_gap10_dedx_Y, shr_distance;
+    cosmic_ip, shr_energy_cali, shr_energy_tot_cali, shr_score, hits_ratio, shrmoliereavg,
+    shr_tkfit_gap10_dedx_Y, shr_distance, trkpid, shr_tkfit_dedx_Y, tksh_distance, trk_energy;
 
   in.at( "shr_id" ) >> shr_id;
   in.at( "nslice" ) >> nslice;
   in.at( "n_showers" ) >> n_showers;
   in.at( "n_tracks" ) >> n_tracks;
+  in.at( "n_tracks_contained" ) >> n_tracks_contained;
   in.at( "reco_nu_vtx_sce_x" ) >> nu_vx;
   in.at( "reco_nu_vtx_sce_y" ) >> nu_vy;
   in.at( "reco_nu_vtx_sce_z" ) >> nu_vz;
@@ -171,27 +172,41 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   in.at( "topological_score" ) >> topo_score;
   in.at( "CosmicIP" ) >> cosmic_ip;
   in.at( "shr_energy_cali" ) >> shr_energy_cali;
+  in.at( "shr_energy_tot_cali" ) >> shr_energy_tot_cali;
   in.at( "shr_score" ) >> shr_score;
   in.at( "hits_ratio" ) >> hits_ratio;
   in.at( "shrmoliereavg" ) >> shrmoliereavg;
   in.at( "shr_tkfit_gap10_dedx_Y" ) >> shr_tkfit_gap10_dedx_Y;
+  in.at( "shr_tkfit_dedx_Y" ) >> shr_tkfit_dedx_Y;
   in.at( "shr_distance" ) >> shr_distance;
+  in.at( "tksh_distance" ) >> tksh_distance;
+  in.at( "trk_energy" ) >> trk_energy;
+  in.at( "trkpid" ) >> trkpid;
+  in.at( "n_showers_contained" ) >> n_showers_contained;
+  in.at( "swtrig_pre" ) >> swtrig_pre;
 
   std::vector< unsigned int >* gen_vec;
   in.at( "pfp_generation_v" ) >> gen_vec;
 
-  // PRE-SELECTION
+  // PRE-SELECTION (signal definition constraints and quality cuts)
+  // passes software trigger
+  bool passes_software_trigger = ( swtrig_pre==1 );
   // neutrino slice
   bool has_nu_slice = ( nslice == 1 );
   // vertex inside FV
   bool in_fv = this->get_fv().is_inside( nu_vx, nu_vy, nu_vz );
-  // at least one shower
-  bool has_shower = ( n_showers >= 1 );
   // contained fraction
-  bool contained_cut_ok = ( contained_frac >= 0.85 );
+  bool contained_cut_ok = ( contained_frac > 0.9 );
+  // has showee
+  bool has_shower = ( n_showers_contained == 1 );
+  // has contained tracks
+  bool has_contained_tracks = ( n_tracks_contained > 0 );
+  // track energy
+  bool trk_energy_ok = ( trk_energy > 0.04 ); // GeV
 
-  bool sel_pass_preselection = has_nu_slice && in_fv
-    && has_shower && contained_cut_ok;
+  bool sel_pass_preselection = passes_software_trigger
+    && has_nu_slice && in_fv && contained_cut_ok
+    && has_shower && has_contained_tracks && trk_energy_ok;
 
   // COSMIC REJECTION
   // topological score
@@ -201,65 +216,85 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   bool sel_pass_cosmic_rejection = topo_ok && cip_ok;
 
-  // SHOWER IDENTIFICATION
-  // valid shower ID
-  bool valid_ID = ( shr_id != 0 ); // zero is the default value (not filled)
-  // shower pfp generation
-  // NOTE: The second expression after the && is only evaluated if we have
-  // a valid shower ID, thus avoiding any problems with an invalid
-  // argument to the std::vector::at() function.
-  bool second_generation = valid_ID && gen_vec->at( shr_id - 1 ) == 2;
-  // shower energy (threshold matches the signal definition)
-  bool energy_ok = ( ( shr_energy_cali / 0.83 ) >= 0.03 );
-  // shower score
-  bool score_ok = ( shr_score <= 0.15 );
-  // shower hits ratio
-  bool hits_ratio_ok = ( hits_ratio >= 0.5 );
+  // OTHER
+  bool shower_score_ok = ( shr_score < 0.125 );
+  bool shrmoliereavg_ok = ( shrmoliereavg < 8. );
+  bool trkpid_ok = ( trkpid < 0. );
+  bool shr_trkfit_dedx_Y_ok = ( shr_tkfit_dedx_Y < 4. );
+  bool tksh_distance_ok = ( tksh_distance < 5. );
 
-  bool sel_pass_shower_identification = valid_ID && second_generation
-    && energy_ok && score_ok && hits_ratio_ok;
+  bool sel_pass_other = shower_score_ok && shrmoliereavg_ok
+    && trkpid_ok && shr_trkfit_dedx_Y_ok && tksh_distance_ok;
 
-  // ELECTRON IDENTIFICATION
-  // moliere average angle
-  bool moliere_ok = ( shrmoliereavg <= 7. );
-  // shower distance and dE/dx (default to passing the cut)
-  bool dist_and_dEdx_ok = true;
-  if ( n_tracks > 0 ) {
-    // track present, 2D distance-dE/dx cut
-    if ( shr_tkfit_gap10_dedx_Y >= 0. && shr_tkfit_gap10_dedx_Y < 1.75 ) {
-      if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-    }
-    else if ( shr_tkfit_gap10_dedx_Y >= 1.75 && shr_tkfit_gap10_dedx_Y < 2.5 ) {
-      if ( shr_distance > 12.0 ) dist_and_dEdx_ok = false;
-    }
-    else if ( shr_tkfit_gap10_dedx_Y >= 2.5 && shr_tkfit_gap10_dedx_Y < 3.5 ) {
-      if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-    }
-    else if ( shr_tkfit_gap10_dedx_Y >= 3.5 && shr_tkfit_gap10_dedx_Y < 4.7 ) {
-      dist_and_dEdx_ok = false;
-    }
-    else if ( shr_tkfit_gap10_dedx_Y >= 4.7 ) {
-      if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-    }
-    else dist_and_dEdx_ok = false;
-  }
-  else {
-    // no track, 1D dE/dx cut
-    if ( shr_tkfit_gap10_dedx_Y < 1.7 ) dist_and_dEdx_ok = false;
-    if ( shr_tkfit_gap10_dedx_Y > 2.7 && shr_tkfit_gap10_dedx_Y < 5.5 ) {
-      dist_and_dEdx_ok = false;
-    }
-  }
+  // // SHOWER IDENTIFICATION
+  // // valid shower ID
+  // bool valid_ID = ( shr_id != 0 ); // zero is the default value (not filled)
+  // // shower pfp generation
+  // // NOTE: The second expression after the && is only evaluated if we have
+  // // a valid shower ID, thus avoiding any problems with an invalid
+  // // argument to the std::vector::at() function.
+  // bool second_generation = valid_ID && gen_vec->at( shr_id - 1 ) == 2;
+  // // shower energy (threshold matches the signal definition)
+  // bool energy_ok = ( ( shr_energy_cali / 0.83 ) >= 0.03 );
+  // // shower score
+  // bool score_ok = ( shr_score <= 0.15 );
+  // // shower hits ratio
+  // bool hits_ratio_ok = ( hits_ratio >= 0.5 );
 
-  bool sel_pass_electron_identification = moliere_ok && dist_and_dEdx_ok;
+  // bool sel_pass_shower_identification = valid_ID && second_generation
+  //   && energy_ok && score_ok && hits_ratio_ok;
+
+  // // ELECTRON IDENTIFICATION
+  // // moliere average angle
+  // bool moliere_ok = ( shrmoliereavg <= 7. );
+  // // shower distance and dE/dx (default to passing the cut)
+  // bool dist_and_dEdx_ok = true;
+  // if ( n_tracks > 0 ) {
+  //   // track present, 2D distance-dE/dx cut
+  //   if ( shr_tkfit_gap10_dedx_Y >= 0. && shr_tkfit_gap10_dedx_Y < 1.75 ) {
+  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
+  //   }
+  //   else if ( shr_tkfit_gap10_dedx_Y >= 1.75 && shr_tkfit_gap10_dedx_Y < 2.5 ) {
+  //     if ( shr_distance > 12.0 ) dist_and_dEdx_ok = false;
+  //   }
+  //   else if ( shr_tkfit_gap10_dedx_Y >= 2.5 && shr_tkfit_gap10_dedx_Y < 3.5 ) {
+  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
+  //   }
+  //   else if ( shr_tkfit_gap10_dedx_Y >= 3.5 && shr_tkfit_gap10_dedx_Y < 4.7 ) {
+  //     dist_and_dEdx_ok = false;
+  //   }
+  //   else if ( shr_tkfit_gap10_dedx_Y >= 4.7 ) {
+  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
+  //   }
+  //   else dist_and_dEdx_ok = false;
+  // }
+  // else {
+  //   // no track, 1D dE/dx cut
+  //   if ( shr_tkfit_gap10_dedx_Y < 1.7 ) dist_and_dEdx_ok = false;
+  //   if ( shr_tkfit_gap10_dedx_Y > 2.7 && shr_tkfit_gap10_dedx_Y < 5.5 ) {
+  //     dist_and_dEdx_ok = false;
+  //   }
+  // }
+
+  // bool sel_pass_electron_identification = moliere_ok && dist_and_dEdx_ok;
 
   // Flag indicating whether the event passed the full selection
+  // bool sel_nu_e_cc = sel_pass_preselection && sel_pass_cosmic_rejection
+  //   && sel_pass_shower_identification && sel_pass_electron_identification;
+
   bool sel_nu_e_cc = sel_pass_preselection && sel_pass_cosmic_rejection
-    && sel_pass_shower_identification && sel_pass_electron_identification;
+    && sel_pass_other;
+
+  // // Set the reco energy of the electron candidate if we found one
+  // double reco_electron_energy = BOGUS;
+  // if ( sel_pass_shower_identification ) {
+  //   // Apply the shower energy correction factor
+  //   reco_electron_energy = shr_energy_cali / 0.83;
+  // }
 
   // Set the reco energy of the electron candidate if we found one
   double reco_electron_energy = BOGUS;
-  if ( sel_pass_shower_identification ) {
+  if ( sel_nu_e_cc ) {
     // Apply the shower energy correction factor
     reco_electron_energy = shr_energy_cali / 0.83;
   }
@@ -269,7 +304,10 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   auto& out = ev.out();
   out[ "sel_pass_preselection" ] = sel_pass_preselection;
   out[ "sel_pass_cosmic_rejection" ] = sel_pass_cosmic_rejection;
-  out[ "sel_pass_shower_identification" ] = sel_pass_shower_identification;
+  out[ "sel_pass_other" ] = sel_pass_other;
+  // out[ "sel_pass_numu_loose_rejection" ] = sel_pass_numu_loose_rejection;
+  // out[ "sel_pass_pi0_loose_rejection" ] = sel_pass_pi0_loose_rejection;
+  // out[ "sel_pass_shower_identification" ] = sel_pass_shower_identification;
   out[ "sel_nu_e_cc" ] = sel_nu_e_cc;
   out[ "reco_electron_energy" ] = reco_electron_energy;
 
