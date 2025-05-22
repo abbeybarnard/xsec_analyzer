@@ -22,36 +22,30 @@ if [ ! -d "${output_dir}" ]; then
   exit 2
 fi
 
-input_files=()
-# Loop over each line of the ntuple list file
-while read line; do
-  # Select lines that do not begin with a '#' character and contain at least
-  # one non-whitespace character. These are assumed to be input file names
-  if [[ ! $line = \#* ]] && [[ $line = *[^[:space:]]* ]]; then
-    # Process the next input ntuple file
-      input_files+=(${line})
-  fi
-done < "${ntuple_list_file}"
-
-# Calculate total number of input files
-total_files=${#input_files[*]}
-echo "Total number of files = "${total_files}
+total_files=$(grep -v '^\s*#' "$ntuple_list_file" | grep -v '^\s*$' | wc -l)
+echo "Total number of files = ${total_files}"
 
 counter=0
-# Loop over each input file
-for file in "${input_files[@]}"
-do
-    input_file_name=$( echo $file | awk '{print $0}' )
-    input_file_type=$( echo $file | awk '{print $1}' )
-    output_file_name="${output_dir}/xsec-ana-$(basename ${input_file_name})"
-    echo "Starting file:"${counter}"/"${total_files}
-    echo "Input file name: "${input_file_name}
-    echo "Input file type: "${input_file_type}
-    echo "Selections: "${selections}
-    echo "Output file name: "${output_file_name}
+# Read file path and type from each non-comment line
+while read -r file_path file_type; do
+  # Skip comments and empty lines
+  if [[ "$file_path" =~ ^# ]] || [[ -z "$file_path" ]]; then
+    continue
+  fi
 
-    date
-    time ProcessNTuples ${input_file_name} ${input_file_type} ${selections} ${output_file_name}
-    date
-    counter=$((counter + 1))
-done
+  input_file_name="$file_path"
+  input_file_type="$file_type"
+  output_file_name="${output_dir}/xsec-ana-$(basename "${input_file_name}")"
+
+  echo "Starting file: ${counter}/${total_files}"
+  echo "Input file name: ${input_file_name}"
+  echo "Input file type: ${input_file_type}"
+  echo "Selections: ${selections}"
+  echo "Output file name: ${output_file_name}"
+
+  date
+  time ProcessNTuples "${input_file_name}" "${input_file_type}" "${selections}" "${output_file_name}"
+  date
+
+  counter=$((counter + 1))
+done < "${ntuple_list_file}"
