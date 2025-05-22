@@ -1,7 +1,6 @@
 // XSecAnalyzer includes
 #include "XSecAnalyzer/FiducialVolume.hh"
 #include "XSecAnalyzer/Functions.hh"
-//#include "XSecAnalyzer/TreeUtils.hh"
 
 #include "XSecAnalyzer/Selections/NuMICC1eNp.hh"
 
@@ -305,9 +304,6 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   out[ "sel_pass_preselection" ] = sel_pass_preselection;
   out[ "sel_pass_cosmic_rejection" ] = sel_pass_cosmic_rejection;
   out[ "sel_pass_other" ] = sel_pass_other;
-  // out[ "sel_pass_numu_loose_rejection" ] = sel_pass_numu_loose_rejection;
-  // out[ "sel_pass_pi0_loose_rejection" ] = sel_pass_pi0_loose_rejection;
-  // out[ "sel_pass_shower_identification" ] = sel_pass_shower_identification;
   out[ "sel_nu_e_cc" ] = sel_nu_e_cc;
   out[ "reco_electron_energy" ] = reco_electron_energy;
 

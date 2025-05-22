@@ -2,17 +2,17 @@
 # over from the fact this was BNB only for a while, so just ignore it. 
 
 # Run 1 FHC beam-on and beam-off data
-/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/neutrinoselection_filt_run1_beamon_beamgood_v5.root onBNB
-/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/neutrinoselection_filt_run1_beamoff_v5.root extBNB
+/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_beam_on_run4b.root onBNB
+/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_beam_off_run4b.root extBNB
 
 # Fake Data
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_reweighted_fakeweights.root onBNB
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_nue_reweighted_fakeweights.root nueMC
 
 # Run 1 FHC CV MC
-/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_nue_run1.root nueMC
-/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_nu_run1.root numuMC
-/exp/uboone/data/users/abarnard/pelee_ntuples/run_1/updated_run_1/numi_dirt_run1.root dirtMC
+/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_nue_overlay_run4b.root nueMC
+/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_nu_overlay_run4b.root numuMC
+#/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/ dirtMC
 
 # Run 4b RHC Detvars
 # These have 'nueDV' at the end
