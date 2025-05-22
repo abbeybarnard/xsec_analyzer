@@ -1,7 +1,7 @@
 # The 'onBNB' and 'extBNB' are just flags for the type of file it is. This has carried
 # over from the fact this was BNB only for a while, so just ignore it. 
 
-# Run 1 FHC beam-on and beam-off data
+# Run 4b RHC beam-on and beam-off data
 /exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_beam_on_run4b.root onBNB
 /exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_beam_off_run4b.root extBNB
 
@@ -9,7 +9,7 @@
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_reweighted_fakeweights.root onBNB
 #/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_nue_reweighted_fakeweights.root nueMC
 
-# Run 1 FHC CV MC
+# Run 4b RHC CV MC
 /exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_nue_overlay_run4b.root nueMC
 /exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/numi_nu_overlay_run4b.root numuMC
 #/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/superunified/run4b/ dirtMC
