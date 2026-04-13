@@ -14,8 +14,8 @@ void qp_demo() {
   auto& fpm = FilePropertiesManager::Instance();
   std::string xsec_analyzer_dir = gSystem->Getenv( "XSEC_ANALYZER_DIR" );
   fpm.load_file_properties( xsec_analyzer_dir + "/configs/file_properties.txt" );
-  qp.plot( "shr_score",
+  qp.plot( "trk_id",
     "NuMICC1eNp_Selected",
     0., 0.3, 1, { "nuselection/NeutrinoSelectionFilter" },
-    "Pandora Score", "Events", "Run 1" );
+    "Electron Energy", "Events", "Run 4b" );
 }

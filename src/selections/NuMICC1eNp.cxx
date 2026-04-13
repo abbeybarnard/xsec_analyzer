@@ -7,8 +7,8 @@
 NuMICC1eNp::NuMICC1eNp() : SelectionBase( "NuMICC1eNp" ) {
   // FV definition as in PeLEE analysis
   // x_min, x_max, y_min, y_max, z_min, z_max
-  // Have matched this up with what Katrina used.
-  this->define_fv( 10., 246., -106., 106., 10., 1026. );
+  // This is the correct FV definition for this analysis, which is the same as the one used in the PeLEE analysis Note that the z_min and z_max values are different from the ones used in the 1eNp analysis, which were incorrect.
+  this->define_fv( 10., 246., -101., 101., 10., 986. );
 }
 
 // This is the signal definition.
@@ -86,7 +86,7 @@ std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
   bool sig_isCC = ( ccnc == CHARGED_CURRENT );
 
   // Require a final-state electron above threshold
-  bool sig_has_fs_electron = ( nelec > 0 ); // 30 MeV threshold
+  bool sig_has_fs_electron = ( nelec == 1 && Ee > 0.070 ); // exactly one electron with total energy E > 70 MeV
 
   // This is the total signal definition with everything in it - originally missed the proton and pion cuts
   bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron && (num_p_in_energy_range > 0) && (!has_pions);
@@ -153,13 +153,12 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   // Get access to the reco information needed to apply the selection
   const auto& in = ev.in();
-  unsigned int shr_id, n_tracks_contained, n_showers_contained; // This is the one that is "i" compared to "I"
-  int nslice, n_showers, n_tracks, swtrig_pre;
+  unsigned int n_tracks_contained, n_showers_contained; // This is the one that is "i" compared to "I"
+  int nslice, n_showers, n_tracks;
   float nu_vx, nu_vy, nu_vz, contained_frac, topo_score,
     cosmic_ip, shr_energy_cali, shr_energy_tot_cali, shr_score, hits_ratio, shrmoliereavg,
     shr_tkfit_gap10_dedx_Y, shr_distance, trkpid, shr_tkfit_dedx_Y, tksh_distance, trk_energy;
 
-  in.at( "shr_id" ) >> shr_id;
   in.at( "nslice" ) >> nslice;
   in.at( "n_showers" ) >> n_showers;
   in.at( "n_tracks" ) >> n_tracks;
@@ -182,29 +181,28 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   in.at( "trk_energy" ) >> trk_energy;
   in.at( "trkpid" ) >> trkpid;
   in.at( "n_showers_contained" ) >> n_showers_contained;
-  in.at( "swtrig_pre" ) >> swtrig_pre;
+  //in.at( "swtrig_pre" ) >> swtrig_pre;
 
   std::vector< unsigned int >* gen_vec;
   in.at( "pfp_generation_v" ) >> gen_vec;
 
   // PRE-SELECTION (signal definition constraints and quality cuts)
   // passes software trigger
-  bool passes_software_trigger = ( swtrig_pre==1 );
+  //bool passes_software_trigger = ( swtrig_pre==1 );
   // neutrino slice
   bool has_nu_slice = ( nslice == 1 );
   // vertex inside FV
   bool in_fv = this->get_fv().is_inside( nu_vx, nu_vy, nu_vz );
   // contained fraction
   bool contained_cut_ok = ( contained_frac > 0.9 );
-  // has showee
+  // has shower
   bool has_shower = ( n_showers_contained == 1 );
   // has contained tracks
   bool has_contained_tracks = ( n_tracks_contained > 0 );
   // track energy
   bool trk_energy_ok = ( trk_energy > 0.04 ); // GeV
 
-  bool sel_pass_preselection = passes_software_trigger
-    && has_nu_slice && in_fv && contained_cut_ok
+  bool sel_pass_preselection = has_nu_slice && in_fv && contained_cut_ok
     && has_shower && has_contained_tracks && trk_energy_ok;
 
   // COSMIC REJECTION

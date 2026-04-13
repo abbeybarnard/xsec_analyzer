@@ -15,7 +15,7 @@ if [ "$MY_OS_REL" = "AlmaLinux" ]; then
 elif [ "$MY_OS_REL" = "Scientific Linux" ]; then
   # On SL7, we get ROOT as a side-effect of setting up uboonecode
   source /cvmfs/uboone.opensciencegrid.org/products/setup_uboone.sh
-  setup uboonecode v10_04_07_05 -q e26:prof # Updates this version for the new files!
+  setup uboonecode v10_04_07_05 -q e26:prof
 elif [ "$(uname)" == "Darwin" ]; then
   # We are on macOS, so tell the user they're on their own
   echo "macOS system detected, unable to automatically set up ROOT"
