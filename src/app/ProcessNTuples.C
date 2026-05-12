@@ -32,9 +32,10 @@
 
 int main( int argc, char* argv[] ) {
 
-  if ( argc != 5 ) {
+  if ( argc != 5 && argc != 6 ) {
     std::cout << "Usage: " << argv[0]
-      << " INPUT_NTUPLE_FILE FILE_TYPE SELECTION_NAMES OUTPUT_FILE\n";
+      << " INPUT_NTUPLE_FILE FILE_TYPE SELECTION_NAMES OUTPUT_FILE"
+      << " [BEAM_MODE]\n";
     return 1;
   }
 
@@ -42,6 +43,8 @@ int main( int argc, char* argv[] ) {
   std::string file_type( argv[ 2 ] );
   std::stringstream sel_ss( argv[ 3 ] );
   std::string output_file_name( argv[ 4 ] );
+  std::string beam_mode;
+  if ( argc == 6 ) beam_mode = argv[ 5 ];
 
   std::vector< std::string > selection_names;
 
@@ -53,11 +56,20 @@ int main( int argc, char* argv[] ) {
   std::cout << "\nRunning ProcessNTuples with options:\n";
   std::cout << "\tinput_file_name: " << input_file_name << '\n';
   std::cout << "\tinput_file_type: " << file_type << '\n';
+  std::cout << "\tbeam_mode: " << ( beam_mode.empty() ? "UNKNOWN" : beam_mode )
+    << '\n';
   std::cout << "\toutput_file_name: " << output_file_name << '\n';
   std::cout << "\n\nselection names:\n";
   for ( const auto& sel_name : selection_names ) {
     std::cout << "\t\t- " << sel_name << '\n';
   }
+
+  if ( !beam_mode.empty() ) {
+    gSystem->Setenv( "XSEC_ANALYZER_BEAM_MODE", beam_mode.c_str() );
+  }
+
+  // Set the file type as an environment variable for use in selections
+  gSystem->Setenv( "XSEC_ANALYZER_FILE_TYPE", file_type.c_str() );
 
   // Copy the input ntuple file to the output ntuple file
   int copy_result = gSystem->CopyFile( input_file_name.c_str(),
@@ -178,7 +190,8 @@ int main( int argc, char* argv[] ) {
       // Active volume definition needed to correctly incorporate
       // signal-enhanced samples generated only in the active volume rather
       // than the full cryostat volume
-      FiducialVolume av = { 0.0, 256.0, -120.0, 120.0, 0.0, 1076.0 };
+      // FiducialVolume av = { 0.0, 256.0, -120.0, 120.0, 0.0, 1076.0 }; // Patrick's
+      FiducialVolume av = { -1.55, 254.8, -116.5, 116.5, 0.0, 1036.8 }; // Katrina's
 
       // Get access to some truth information for the current event that
       // we need for filtering

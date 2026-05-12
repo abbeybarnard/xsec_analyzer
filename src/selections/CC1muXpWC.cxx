@@ -26,7 +26,7 @@ bool CC1muXpWC::is_selected( AnalysisEvent& ev ) {
   pf_eval.at( "reco_nuvtxY" ) >> nu_vy;
   pf_eval.at( "reco_nuvtxZ" ) >> nu_vz;
 
-  // Is the reco neutrino vertex in the fiducial volume
+  
   bool sel_reco_vertex_in_FV = this->get_fv().is_inside( nu_vx, nu_vy, nu_vz );
 
   static const std::string inclusive_cuts( "numu_score > "

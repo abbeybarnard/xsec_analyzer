@@ -1,0 +1,18 @@
+NuMICC1eNp_cos_opening_angle
+XSecAnalyzer/NuMICC1eNp
+NuMICC1eNp
+5
+0 0 "is_true_signal && true_cos_opening_angle >= -1.000 && true_cos_opening_angle < -0.500"
+0 0 "is_true_signal && true_cos_opening_angle >= -0.500 && true_cos_opening_angle < -0.174"
+0 0 "is_true_signal && true_cos_opening_angle >= -0.174 && true_cos_opening_angle < 0.174"
+0 0 "is_true_signal && true_cos_opening_angle >= 0.174 && true_cos_opening_angle < 0.500"
+0 0 "is_true_signal && true_cos_opening_angle >= 0.500 && true_cos_opening_angle <= 1.000"
+1 -1 "!is_true_signal"
+6
+5
+0 0 "sel_nue_cc && reco_opening_angle >= -1.000 && reco_opening_angle < -0.500"
+0 0 "sel_nue_cc && reco_opening_angle >= -0.500 && reco_opening_angle < -0.174"
+0 0 "sel_nue_cc && reco_opening_angle >= -0.174 && reco_opening_angle < 0.174"
+0 0 "sel_nue_cc && reco_opening_angle >= 0.174 && reco_opening_angle < 0.500"
+0 0 "sel_nue_cc && reco_opening_angle >= 0.500 && reco_opening_angle <= 1.000"
+1 -1 "sel_nue_cc && (reco_opening_angle < -1.000 || reco_opening_angle > 1.000 || reco_opening_angle == 9999)"

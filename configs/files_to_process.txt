@@ -1,18 +1,21 @@
-# The 'onBNB' and 'extBNB' are just flags for the type of file it is. This has carried
-# over from the fact this was BNB only for a while, so just ignore it. 
+# The columns are now:
+# file_name file_type beam_mode [triggers POT (for data only)]
+# For the MC files, the POT is calculated automatically!
 
-# Run 4b RHC beam-on and beam-off data
-/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/hyperunified/run4b/numi_run4b_beam_on.root onBNB
-/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/hyperunified/run4b/numi_run4b_beam_off.root extBNB
+#############################################################################################
 
-# Fake Data
-#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_reweighted_fakeweights.root onBNB
-#/Users/patrick/Documents/MicroBooNE/CrossSections/XSec_Analyzer/pion-ntuples/numi_nuwro_overlay_pion_ntuples_run1_fhc_nue_reweighted_fakeweights.root nueMC
+# Run 4b
+# Intrinsic overlay 
+/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4b_NuMI_RHC_nue_overlay_surprise_v10_04_07_09_reco2_hist.root nueMC RHC
+# Standard overlay 
+/pnfs/uboone/persistent/users/uboonepro/surprise/retuple/NuMI/checkout_MCC9.10_Run4b_v10_04_07_20_NuMI_RHC_nu_overlay_patch_retuple_retuple_hist.root numuMC RHC
+# Beam on
+# Beam off
+/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4b_NuMI_beam_off_RHC_data_surprise_v10_04_07_09_reco2_hist.root extBNB RHC
+# Dirt
+/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4a4c_NuMI_RHC_dirt_overlay_surprise_reco2_hist_4b.root dirtMC RHC 
 
-# Run 4b RHC CV MC
-/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/hyperunified/run4b/numi_run4b_nue_overlay.root nueMC
-/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/hyperunified/run4b/numi_run4b_nu_overlay.root numuMC
-#/exp/uboone/data/users/abarnard/ccnp_pelee_ntuples/hyperunified/run4b/ dirtMC
+#############################################################################################
 
-# Run 4b RHC Detvars
+# Detvars
 # These have 'nueDV' at the end

@@ -7,6 +7,7 @@
 // ROOT includes
 #include "TBranch.h"
 #include "TFile.h"
+#include "TKey.h"
 #include "TROOT.h"
 #include "TTree.h"
 
@@ -14,6 +15,34 @@
 #include "XSecAnalyzer/FilePropertiesManager.hh"
 #include "XSecAnalyzer/MCC9SystematicsCalculator.hh"
 #include "XSecAnalyzer/UniverseMaker.hh"
+
+// Helper function that recursively searches a TDirectory for a TTree
+// containing a branch with the given name. Returns the first match found,
+// or nullptr if none is found.
+TTree* find_tree_with_branch( TDirectory* dir,
+  const std::string& branch_name )
+{
+  TIter nextkey( dir->GetListOfKeys() );
+  TKey* key;
+  while ( (key = (TKey*)nextkey()) ) {
+    TObject* obj = key->ReadObj();
+
+    // Recurse into subdirectories
+    TDirectory* subdir = dynamic_cast<TDirectory*>( obj );
+    if ( subdir ) {
+      TTree* result = find_tree_with_branch( subdir, branch_name );
+      if ( result ) return result;
+      continue;
+    }
+
+    // Check TTrees for the requested branch
+    TTree* tree = dynamic_cast<TTree*>( obj );
+    if ( tree && tree->GetBranch( branch_name.c_str() ) ) {
+      return tree;
+    }
+  }
+  return nullptr;
+}
 
 // Helper function that checks whether a given ROOT file represents an ntuple
 // from a reweightable MC sample. This is done by checking for the presence of
@@ -24,14 +53,19 @@
 // to have this branch.
 bool is_reweightable_mc_ntuple( const std::string& input_file_name ) {
   TFile temp_file( input_file_name.c_str(), "read" );
-  TTree* stv_tree = nullptr;
-  temp_file.GetObject( "stv_tree", stv_tree );
-  if ( !stv_tree ) throw std::runtime_error( "Missing TTree \"stv_tree\" in"
-    " the input ROOT file " + input_file_name );
 
-  TBranch* cv_weight_br = stv_tree->GetBranch( TUNE_WEIGHT_NAME.c_str() );
-  bool has_cv_weights = ( cv_weight_br != nullptr );
-  return has_cv_weights;
+  // Search recursively through all directories for a TTree containing
+  // the CV tune weight branch, rather than hardcoding the tree name.
+  TTree* stv_tree = find_tree_with_branch( &temp_file,
+    TUNE_WEIGHT_NAME );
+
+  if ( !stv_tree ) {
+    // No tree with weights found — treat as non-reweightable
+    // (e.g. data, detector variations, alternative generators)
+    return false;
+  }
+
+  return true;
 }
 
 int main( int argc, char* argv[] ) {
@@ -53,7 +87,8 @@ int main( int argc, char* argv[] ) {
     << univmake_config_file_name << '\n';
   std::cout << "\toutput_file_name: " << output_file_name << '\n';
 
-  // Simultaneously check that we can write to the output file directory, and wipe any information within that file
+  // Simultaneously check that we can write to the output file directory,
+  // and wipe any information within that file
   TFile* temp_file = new TFile(output_file_name.c_str(), "recreate");
   if (!temp_file || temp_file->IsZombie()) {
     std::cerr << "Could not write to output file: "

@@ -30,7 +30,8 @@ ROOT_DICTIONARY := $(LIB_DIR)/dictionaries.o
 SHARED_LIB := $(LIB_DIR)/libXSecAnalyzer.$(SHARED_LIB_SUFFIX)
 
 CXXFLAGS := $(shell root-config --cflags) -I$(INCLUDE_DIR)
-LDFLAGS := $(shell root-config --libs) -L$(LIB_DIR) -lXSecAnalyzer
+ROOT_LIBS := $(shell root-config --libs)
+LDFLAGS := $(ROOT_LIBS) -L$(LIB_DIR) -lXSecAnalyzer
 
 ifneq ($(MAKECMDGOALS),debug)
   CXXFLAGS += -O3
@@ -78,7 +79,7 @@ $(SHARED_OBJECTS): %.o : %.cxx
 	$(CXX) $(CXXFLAGS) -fPIC -o $@ -c $<
 
 $(SHARED_LIB): $(ROOT_DICTIONARY) $(SHARED_OBJECTS)
-	$(CXX) $(CXXFLAGS) $(shell root-config --libs) -o $@ -fPIC -shared $^
+	$(CXX) $(CXXFLAGS) $(ROOT_LIBS) -o $@ -fPIC -shared $^
 
 bin/ProcessNTuples: src/app/ProcessNTuples.C $(SHARED_LIB)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<

@@ -1,0 +1,18 @@
+NuMICC1eNp_electron_energy
+XSecAnalyzer/NuMICC1eNp
+NuMICC1eNp
+5
+0 0 "is_true_signal && true_elec_e >= 0.02 && true_elec_e < 0.42"
+0 0 "is_true_signal && true_elec_e >= 0.42 && true_elec_e < 0.62"
+0 0 "is_true_signal && true_elec_e >= 0.62 && true_elec_e < 0.82"
+0 0 "is_true_signal && true_elec_e >= 0.82 && true_elec_e < 1.22"
+0 0 "is_true_signal && true_elec_e >= 1.22 && true_elec_e < 7.00"
+1 -1 "!is_true_signal"
+6
+5
+0 0 "sel_nue_cc && reco_electron_energy >= 0.02 && reco_electron_energy < 0.42"
+0 0 "sel_nue_cc && reco_electron_energy >= 0.42 && reco_electron_energy < 0.62"
+0 0 "sel_nue_cc && reco_electron_energy >= 0.62 && reco_electron_energy < 0.82"
+0 0 "sel_nue_cc && reco_electron_energy >= 0.82 && reco_electron_energy < 1.22"
+0 0 "sel_nue_cc && reco_electron_energy >= 1.22 && reco_electron_energy <= 2.50"
+1 -1 "sel_nue_cc && (reco_electron_energy < 0.02 || reco_electron_energy > 2.50 || reco_electron_energy == 9999)"

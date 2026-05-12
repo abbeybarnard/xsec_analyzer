@@ -12,3 +12,18 @@ stv_root_dict_rdict.pcm
 # Ignore files used by clangd indexing
 compile_commands.json
 .cache
+
+# PDF output plots
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Compiled object files
+*.d
+
+# Compiled NuMI executables
+src/app/NuMI/AddBeamlineGeometryWeights
+src/app/NuMI/AddFakeWeights

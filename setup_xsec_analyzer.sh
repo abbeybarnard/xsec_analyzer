@@ -6,6 +6,27 @@ if test -f "/etc/os-release"; then
     | sed -e 's/NAME=//g' -e 's/"//g')
 fi
 
+# --------------------------------------------------------------------
+# Added cleanup step:
+# Remove old ROOT-related settings before loading the new environment.
+# This helps prevent mixing ROOT 6.26 and ROOT 6.28 in the same shell.
+# --------------------------------------------------------------------
+unset ROOTSYS
+unset ROOT_INCLUDE_PATH
+unset PYTHONPATH
+
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+  export LD_LIBRARY_PATH="$(
+    printf '%s' "$LD_LIBRARY_PATH" \
+    | tr ':' '\n' \
+    | grep -v 'products/root/v6_26_06b' \
+    | grep -v '^$' \
+    | paste -sd: -
+  )"
+fi
+
+hash -r
+
 # Sets up the local environment for working with xsec_analyzer
 if [ "$MY_OS_REL" = "AlmaLinux" ]; then
   # On AL9, we set up ROOT and a recent compiler version
@@ -32,17 +53,22 @@ THIS_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 export XSEC_ANALYZER_DIR=${THIS_DIRECTORY}
 export PATH=${PATH}:${XSEC_ANALYZER_DIR}/bin:${HOME}/.local/bin
-export ROOT_INCLUDE_PATH=${ROOT_INCLUDE_PATH}:${XSEC_ANALYZER_DIR}/include
+
+# Safer export form: avoids leading colons if the variable was previously empty.
+export ROOT_INCLUDE_PATH="${ROOT_INCLUDE_PATH:+${ROOT_INCLUDE_PATH}:}${XSEC_ANALYZER_DIR}/include"
 
 # Set the library path for loading the XSecAnalyzer shared library at runtime
 if [ "$(uname)" = "Darwin" ]; then
   # macOS platform (use both variables just in case)
-  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${THIS_DIRECTORY}/lib
+  export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${THIS_DIRECTORY}/lib"
   export DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}:${THIS_DIRECTORY}/lib
 else
   # Assume a GNU/Linux platform
-  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${THIS_DIRECTORY}/lib
+  export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${THIS_DIRECTORY}/lib"
 fi
+
+# Make scripts executable
+chmod +x ${XSEC_ANALYZER_DIR}/scripts/*.sh
 
 # Automatically load the XSecAnalyzer environment when starting ROOT
 export ROOTLOGON=${XSEC_ANALYZER_DIR}/src/app/setup_xsec_analyzer.C

@@ -17,9 +17,9 @@ public:
   template < typename Number > bool is_inside( Number x, Number y, Number z )
     const
   {
-    bool x_inside = ( x_min_ < x ) && ( x < x_max_ );
-    bool y_inside = ( y_min_ < y ) && ( y < y_max_ );
-    bool z_inside = ( z_min_ < z ) && ( z < z_max_ );
+    bool x_inside = ( x_min_ <= x ) && ( x <= x_max_ );
+    bool y_inside = ( y_min_ <= y ) && ( y <= y_max_ );
+    bool z_inside = ( z_min_ <= z ) && ( z <= z_max_ );
 
     return ( x_inside && y_inside && z_inside );
   }

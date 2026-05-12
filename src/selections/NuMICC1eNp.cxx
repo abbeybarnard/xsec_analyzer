@@ -1,309 +1,734 @@
 // XSecAnalyzer includes
+#include <atomic>
+#include <cmath>
+#include <cstdlib>
+#include <cstdint>
+#include <map>
+#include <stdexcept>
+
+#include "XSecAnalyzer/Constants.hh"
+#include "XSecAnalyzer/Array.hh"
 #include "XSecAnalyzer/FiducialVolume.hh"
 #include "XSecAnalyzer/Functions.hh"
 
 #include "XSecAnalyzer/Selections/NuMICC1eNp.hh"
 
+// Initialising WC signal definition variables
+namespace {
+
+struct WcRecoCounts {
+  int reco_electron = 0;
+  int reco_proton = 0;
+  int reco_mu = 0;
+  int reco_pi0 = 0;
+  int reco_pi = 0;
+};
+
+template< typename TMap >
+bool read_track_value_as_float( const TMap& tree, const std::string& br_name,
+  int idx, float& out_val ) {
+
+  auto pick_from_vector = [ idx ]( const auto* vec_ptr, float& out ) -> bool {
+    if ( vec_ptr == nullptr || vec_ptr->empty() ) return false;
+
+    if ( 0 <= idx && idx < static_cast< int >( vec_ptr->size() ) ) {
+      out = static_cast< float >( vec_ptr->at( idx ) );
+      return true;
+    }
+    else {
+      return false;
+    }
+  };
+
+  try {
+    std::vector< float >* vec_ptr = nullptr;
+    tree.at( br_name ) >> vec_ptr;
+    if ( pick_from_vector( vec_ptr, out_val ) ) return true;
+  }
+  catch ( const std::runtime_error& ) {}
+
+  try {
+    std::vector< double >* vec_ptr = nullptr;
+    tree.at( br_name ) >> vec_ptr;
+    if ( pick_from_vector( vec_ptr, out_val ) ) return true;
+  }
+  catch ( const std::runtime_error& ) {}
+
+  try {
+    std::vector< std::int32_t >* vec_ptr = nullptr;
+    tree.at( br_name ) >> vec_ptr;
+    if ( pick_from_vector( vec_ptr, out_val ) ) return true;
+  }
+  catch ( const std::runtime_error& ) {}
+
+  try {
+    std::vector< std::uint32_t >* vec_ptr = nullptr;
+    tree.at( br_name ) >> vec_ptr;
+    if ( pick_from_vector( vec_ptr, out_val ) ) return true;
+  }
+  catch ( const std::runtime_error& ) {}
+
+  return false;
+}
+
+/////////////////////////////////////////////////////////////////////
+
+// Choose whether to use Pandora or WC reco variables
+// for the overlapping events
+constexpr bool use_pandora_overlap_e = false; // Prefer WC for electron energy
+constexpr bool use_pandora_overlap_angle = true; // Prefer Pandora for opening angle
+constexpr bool use_pandora_overlap_lead_p_ke = false; // Prefer WC for leading proton KE (but WC track energy is not very good, so maybe prefer Pandora here?)
+
+// Populating those WC signal definition variables
+template< typename TMap >
+WcRecoCounts populate_wc_reco_counters( const TMap& pf_eval ) {
+  WcRecoCounts counts;
+
+  ArrayView< int > reco_pdg;
+  ArrayView< int > reco_mother;
+  ArrayView< float > reco_start_momentum;
+
+  pf_eval.at( "reco_pdg" ) >> reco_pdg;
+  pf_eval.at( "reco_mother" ) >> reco_mother;
+  pf_eval.at( "reco_startMomentum" ) >> reco_start_momentum;
+
+  size_t ntrack = reco_pdg.size();
+  for ( size_t i = 0u; i < ntrack; ++i ) {
+    int pdg = reco_pdg[ i ];
+    int mother = reco_mother[ i ];
+
+    // Must come from neutrino
+    if ( mother != 0 ) continue;
+
+    // Skip photons + neutrons
+    if ( pdg == 22 || pdg == 2112 ) continue;
+
+    // Momentum magnitude (index 3 stores TOTAL energy)
+    float energy = reco_start_momentum[ i ][ 3 ];
+
+    if ( std::abs( pdg ) == 11 && energy - 0.000511 > 0.07 ) {
+      ++counts.reco_electron;
+    }
+    else if ( pdg == 2212 && energy - PROTON_MASS > 0.04 ) {
+      ++counts.reco_proton;
+    }
+    else if ( std::abs( pdg ) == 13 ) {
+      ++counts.reco_mu;
+    }
+    else if ( pdg == 111 ) {
+      ++counts.reco_pi0;
+    }
+    else if ( std::abs( pdg ) == 211 && energy - PI_PLUS_MASS > 0.04 ) {
+      ++counts.reco_pi;
+    }
+  }
+
+  return counts;
+}
+
+} // end anonymous namespace
+
 NuMICC1eNp::NuMICC1eNp() : SelectionBase( "NuMICC1eNp" ) {
   // FV definition as in PeLEE analysis
   // x_min, x_max, y_min, y_max, z_min, z_max
-  // This is the correct FV definition for this analysis, which is the same as the one used in the PeLEE analysis Note that the z_min and z_max values are different from the ones used in the 1eNp analysis, which were incorrect.
   this->define_fv( 10., 246., -101., 101., 10., 986. );
-}
 
-// This is the signal definition.
-std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
+  // Beam mode is passed per file by ProcessNTuples (from files_to_process)
+  // via XSEC_ANALYZER_BEAM_MODE. Default to FHC if not set.
+  const char* beam_mode_env = std::getenv( "XSEC_ANALYZER_BEAM_MODE" );
+  beam_mode_ = beam_mode_env ? beam_mode_env : "FHC";
 
-  // Remember to add things here! These are the variables we use.
-  int nu_pdg, ccnc, npi0, nelec;
-  float nu_x, nu_y, nu_z, Ee;
-  const auto& in = ev.in();
-  in.at( "nu_pdg" ) >> nu_pdg;
-  in.at( "ccnc" ) >> ccnc;
-  in.at( "npi0" ) >> npi0;
-  in.at( "nelec" ) >> nelec;
-  in.at( "elec_e" ) >> Ee;
-  in.at( "true_nu_vtx_x" ) >> nu_x;
-  in.at( "true_nu_vtx_y" ) >> nu_y;
-  in.at( "true_nu_vtx_z" ) >> nu_z;
-
-  // This is the proton selection stuff
-  std::vector< int >* nu_daughter_pdg;
-  std::vector< float > *nu_daughter_energy, *nu_daughter_px,
-    *nu_daughter_py, *nu_daughter_pz;
-
-  in.at( "mc_pdg" ) >> nu_daughter_pdg;
-  in.at( "mc_E" ) >> nu_daughter_energy;
-  in.at( "mc_px" ) >> nu_daughter_px;
-  in.at( "mc_py" ) >> nu_daughter_py;
-  in.at( "mc_pz" ) >> nu_daughter_pz;
-
-  int num_p_in_energy_range = 0;
-  double energy_lead_p = 0.;
-  bool has_pions = false;
-
-  for ( size_t p = 0u; p < nu_daughter_pdg->size(); ++p ) {
-    int pdg = nu_daughter_pdg->at( p );
-    float energy = nu_daughter_energy->at( p );
-
-    // Requires events to have at least one proton with energy > 40 MeV
-    if ( pdg == PROTON ) {
-      if ( energy - PROTON_MASS > 0.040 ) {
-        ++num_p_in_energy_range;
-        if ( energy > energy_lead_p ) {
-          energy_lead_p = energy;
-        }
-      }
-    }
-
-    // Requires events to have no neutral pions
-    else if ( pdg == PI_ZERO ) {
-      has_pions = true;
-    }
-    
-    // Requires events to have no charged pions with energy > 40 MeV
-    else if ( std::abs(pdg) == PI_MINUS ) {
-      if ( energy - PI_MINUS_MASS > 0.040 ) {
-        has_pions = true;
-      }
-    }
-
-    // Requires events to have no charged pions with energy > 40 MeV
-    else if ( std::abs(pdg) == PI_PLUS ) {
-      if ( energy - PI_PLUS_MASS > 0.040 ) {
-        has_pions = true;
-      }
-    }
-  }
-  
-  // Require signal events to be inside the true fiducial volume
-  bool sig_inFV = this->get_fv().is_inside( nu_x, nu_y, nu_z );
-
-  // Require an incident electron neutrino - no electron antineutrinos here!
-  bool sig_isNuE = (nu_pdg == ELECTRON_NEUTRINO);
-
-  // Require a charged-current interaction
-  bool sig_isCC = ( ccnc == CHARGED_CURRENT );
-
-  // Require a final-state electron above threshold
-  bool sig_has_fs_electron = ( nelec == 1 && Ee > 0.070 ); // exactly one electron with total energy E > 70 MeV
-
-  // This is the total signal definition with everything in it - originally missed the proton and pion cuts
-  bool is_signal = sig_inFV && sig_isNuE && sig_isCC && sig_has_fs_electron && (num_p_in_energy_range > 0) && (!has_pions);
-
-  // Evaluate the true kinematic variables of interest
-  float mc_electron_energy = BOGUS;
-  // Check if there is a true final-state electron in this event. If there is
-  // one, then store its energy
-  bool has_true_electron = ( sig_isNuE && sig_isCC );
-  if ( has_true_electron ) mc_electron_energy = Ee;
-
-  // Save TRUTH information to the output TTree
-  auto& out = ev.out();
-  out[ "mc_is_nue" ] = sig_isNuE;
-  out[ "mc_is_CC" ] = sig_isCC;
-  out[ "mc_vertex_in_FV" ] = sig_inFV;
-  out[ "mc_has_fs_electron" ] = sig_has_fs_electron;
-  out[ "mc_is_signal" ] = is_signal; // This is true total signal!
-  out[ "num_p_in_energy_range" ] = num_p_in_energy_range;
-  out[ "has_pions" ] = has_pions;
-  out[ "mc_electron_energy" ] = mc_electron_energy;
-  out[ "energy_lead_p" ] = energy_lead_p;
-
-  // This is where we categorize the events!
-  // All events outside of the true fiducial volume should be categorized
-  // as "out of fiducial volume"
-  
-  // Events that are not within the FV
-  if ( !sig_inFV ) return "Out FV";
-
-  // The two NC categories
-  else if ( !sig_isCC ) {
-    if ( npi0 > 0 ) return "NC #pi^{0}";
-    else return "NC Other";
-  }
-
-  // CC muon (anti)neutrinos
-  else if ( std::abs( nu_pdg ) == MUON_NEUTRINO ) {
-    if ( npi0 > 0 ) return "#nu_{#mu} CC #pi^{0}";
-    else return "#nu_{#mu} CC Other";
-  }
-
-  // CC electron antineutrinos
-  else if ( nu_pdg  == ELECTRON_ANTINEUTRINO ) {
-    if ( npi0 > 0 ) return "#bar{#nu}_{e} CC0#piNp";
-    else return "#bar{#nu}_{e} CC Other";
-  }
-
-  // CC electron neutrinos - where our signal events live
-  else if ( sig_isNuE ) {
-    // signal events
-    if ( is_signal ) return "#nu_{e} CC0#piNp";
-    // non-signal nues
-    else return "#nu_{e} CC Other";
-  }
- 
-  // We shouldn't ever get here, but return "Unknown" just in case
-  std::cout << "Warning: Unknown event! Check the categorization logic.\n";
-  return "Unknown";
+  // File type is passed per file by ProcessNTuples (from files_to_process)
+  // via XSEC_ANALYZER_FILE_TYPE. Default to "unknown" if not set.
+  const char* file_type_env = std::getenv( "XSEC_ANALYZER_FILE_TYPE" );
+  file_type_ = file_type_env ? file_type_env : "unknown";
 }
 
 // This is more where the selection is.
 bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
-  // Get access to the reco information needed to apply the selection
-  const auto& in = ev.in();
-  unsigned int n_tracks_contained, n_showers_contained; // This is the one that is "i" compared to "I"
-  int nslice, n_showers, n_tracks;
-  float nu_vx, nu_vy, nu_vz, contained_frac, topo_score,
-    cosmic_ip, shr_energy_cali, shr_energy_tot_cali, shr_score, hits_ratio, shrmoliereavg,
-    shr_tkfit_gap10_dedx_Y, shr_distance, trkpid, shr_tkfit_dedx_Y, tksh_distance, trk_energy;
+  // Get access to the input Pandora and WC TTrees
+  const auto& pandora = ev.in( "nuselection/NeutrinoSelectionFilter" );
+  const auto& bdt_vars = ev.in( "wcpselection/T_BDTvars" );
+  const auto& pf_eval = ev.in( "wcpselection/T_PFeval" );
+  const auto& eval = ev.in( "wcpselection/T_eval" );
 
-  in.at( "nslice" ) >> nslice;
-  in.at( "n_showers" ) >> n_showers;
-  in.at( "n_tracks" ) >> n_tracks;
-  in.at( "n_tracks_contained" ) >> n_tracks_contained;
-  in.at( "reco_nu_vtx_sce_x" ) >> nu_vx;
-  in.at( "reco_nu_vtx_sce_y" ) >> nu_vy;
-  in.at( "reco_nu_vtx_sce_z" ) >> nu_vz;
-  in.at( "contained_fraction" ) >> contained_frac;
-  in.at( "topological_score" ) >> topo_score;
-  in.at( "CosmicIP" ) >> cosmic_ip;
-  in.at( "shr_energy_cali" ) >> shr_energy_cali;
-  in.at( "shr_energy_tot_cali" ) >> shr_energy_tot_cali;
-  in.at( "shr_score" ) >> shr_score;
-  in.at( "hits_ratio" ) >> hits_ratio;
-  in.at( "shrmoliereavg" ) >> shrmoliereavg;
-  in.at( "shr_tkfit_gap10_dedx_Y" ) >> shr_tkfit_gap10_dedx_Y;
-  in.at( "shr_tkfit_dedx_Y" ) >> shr_tkfit_dedx_Y;
-  in.at( "shr_distance" ) >> shr_distance;
-  in.at( "tksh_distance" ) >> tksh_distance;
-  in.at( "trk_energy" ) >> trk_energy;
-  in.at( "trkpid" ) >> trkpid;
-  in.at( "n_showers_contained" ) >> n_showers_contained;
-  //in.at( "swtrig_pre" ) >> swtrig_pre;
+  // Initialising variables for Pandora fiducial volume coordinates
+  float pandora_nu_vx, pandora_nu_vy, pandora_nu_vz;
+  pandora.at( "reco_nu_vtx_sce_x" ) >> pandora_nu_vx;
+  pandora.at( "reco_nu_vtx_sce_y" ) >> pandora_nu_vy;
+  pandora.at( "reco_nu_vtx_sce_z" ) >> pandora_nu_vz;
 
-  std::vector< unsigned int >* gen_vec;
-  in.at( "pfp_generation_v" ) >> gen_vec;
+  // Initialising variables for WC fiducial volume coordinates
+  float wc_nu_vx, wc_nu_vy, wc_nu_vz;
+  pf_eval.at( "reco_nuvtxX" ) >> wc_nu_vx;
+  pf_eval.at( "reco_nuvtxY" ) >> wc_nu_vy;
+  pf_eval.at( "reco_nuvtxZ" ) >> wc_nu_vz;
 
-  // PRE-SELECTION (signal definition constraints and quality cuts)
-  // passes software trigger
-  //bool passes_software_trigger = ( swtrig_pre==1 );
-  // neutrino slice
-  bool has_nu_slice = ( nslice == 1 );
-  // vertex inside FV
-  bool in_fv = this->get_fv().is_inside( nu_vx, nu_vy, nu_vz );
-  // contained fraction
-  bool contained_cut_ok = ( contained_frac > 0.9 );
-  // has shower
-  bool has_shower = ( n_showers_contained == 1 );
-  // has contained tracks
-  bool has_contained_tracks = ( n_tracks_contained > 0 );
-  // track energy
-  bool trk_energy_ok = ( trk_energy > 0.04 ); // GeV
+  // Initialising some other variables we need
+  float pandora_shr_energy_cali, pandora_shr_energy_tot_cali;
+  float pandora_trk_energy, pandora_tksh_angle;
+  pandora.at( "shr_energy_cali" ) >> pandora_shr_energy_cali;
+  pandora.at( "shr_energy_tot_cali" ) >> pandora_shr_energy_tot_cali;
+  pandora.at( "trk_energy" ) >> pandora_trk_energy;
+  pandora.at( "tksh_angle" ) >> pandora_tksh_angle;
 
-  bool sel_pass_preselection = has_nu_slice && in_fv && contained_cut_ok
-    && has_shower && has_contained_tracks && trk_energy_ok;
+  // -----------------------------------------------------------------------
+  // TRUTH VARIABLES FOR RESOLUTION STUDIES
+  //
+  // These branches are only present in MC files. All reads are wrapped in a
+  // single try/catch so that missing branches (e.g. extBNB) leave all truth
+  // variables at BOGUS without crashing.
+  //
+  // mc_px/py/pz and mc_pdg are vector branches containing all final-state
+  // particles. The leading proton is identified as the highest-momentum
+  // proton (PDG 2212) in the list, which matches the definition used by
+  // the ntuple producer for proton_e.
+  // -----------------------------------------------------------------------
+  float true_elec_e   = BOGUS;
+  float true_proton_e = BOGUS;
+  float elec_px = 0.f, elec_py = 0.f, elec_pz = 0.f;
+  float mc_px_0 = 0.f, mc_py_0 = 0.f, mc_pz_0 = 0.f;
+  bool has_truth_momentum = false;
 
-  // COSMIC REJECTION
-  // topological score
-  bool topo_ok = ( topo_score >= 0.2 );
-  // cosmic impact parameter
-  bool cip_ok = ( cosmic_ip >= 10 );
+  try {
+    pandora.at( "elec_e" )   >> true_elec_e;
+    pandora.at( "proton_e" ) >> true_proton_e;
+    pandora.at( "elec_px" )  >> elec_px;
+    pandora.at( "elec_py" )  >> elec_py;
+    pandora.at( "elec_pz" )  >> elec_pz;
 
-  bool sel_pass_cosmic_rejection = topo_ok && cip_ok;
+    // mc_px/py/pz are vector branches — find the leading proton as the
+    // highest-momentum proton (PDG 2212) in the final state particle list
+    std::vector< float >* mc_px_vec  = nullptr;
+    std::vector< float >* mc_py_vec  = nullptr;
+    std::vector< float >* mc_pz_vec  = nullptr;
+    std::vector< int >*   mc_pdg_vec = nullptr;
+    pandora.at( "mc_px" )  >> mc_px_vec;
+    pandora.at( "mc_py" )  >> mc_py_vec;
+    pandora.at( "mc_pz" )  >> mc_pz_vec;
+    pandora.at( "mc_pdg" ) >> mc_pdg_vec;
 
-  // OTHER
-  bool shower_score_ok = ( shr_score < 0.125 );
-  bool shrmoliereavg_ok = ( shrmoliereavg < 8. );
-  bool trkpid_ok = ( trkpid < 0. );
-  bool shr_trkfit_dedx_Y_ok = ( shr_tkfit_dedx_Y < 4. );
-  bool tksh_distance_ok = ( tksh_distance < 5. );
+    if ( mc_pdg_vec && mc_px_vec && mc_py_vec && mc_pz_vec
+      && !mc_pdg_vec->empty() ) {
 
-  bool sel_pass_other = shower_score_ok && shrmoliereavg_ok
-    && trkpid_ok && shr_trkfit_dedx_Y_ok && tksh_distance_ok;
+      // Find the highest-momentum proton
+      float best_pmag2 = -1.f;
+      int best_idx = -1;
 
-  // // SHOWER IDENTIFICATION
-  // // valid shower ID
-  // bool valid_ID = ( shr_id != 0 ); // zero is the default value (not filled)
-  // // shower pfp generation
-  // // NOTE: The second expression after the && is only evaluated if we have
-  // // a valid shower ID, thus avoiding any problems with an invalid
-  // // argument to the std::vector::at() function.
-  // bool second_generation = valid_ID && gen_vec->at( shr_id - 1 ) == 2;
-  // // shower energy (threshold matches the signal definition)
-  // bool energy_ok = ( ( shr_energy_cali / 0.83 ) >= 0.03 );
-  // // shower score
-  // bool score_ok = ( shr_score <= 0.15 );
-  // // shower hits ratio
-  // bool hits_ratio_ok = ( hits_ratio >= 0.5 );
+      for ( int i = 0; i < static_cast<int>( mc_pdg_vec->size() ); ++i ) {
+        if ( mc_pdg_vec->at( i ) != 2212 ) continue;
+        if ( i >= static_cast<int>( mc_px_vec->size() ) ) continue;
 
-  // bool sel_pass_shower_identification = valid_ID && second_generation
-  //   && energy_ok && score_ok && hits_ratio_ok;
+        float px = mc_px_vec->at( i );
+        float py = mc_py_vec->at( i );
+        float pz = mc_pz_vec->at( i );
+        float pmag2 = px*px + py*py + pz*pz;
 
-  // // ELECTRON IDENTIFICATION
-  // // moliere average angle
-  // bool moliere_ok = ( shrmoliereavg <= 7. );
-  // // shower distance and dE/dx (default to passing the cut)
-  // bool dist_and_dEdx_ok = true;
-  // if ( n_tracks > 0 ) {
-  //   // track present, 2D distance-dE/dx cut
-  //   if ( shr_tkfit_gap10_dedx_Y >= 0. && shr_tkfit_gap10_dedx_Y < 1.75 ) {
-  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-  //   }
-  //   else if ( shr_tkfit_gap10_dedx_Y >= 1.75 && shr_tkfit_gap10_dedx_Y < 2.5 ) {
-  //     if ( shr_distance > 12.0 ) dist_and_dEdx_ok = false;
-  //   }
-  //   else if ( shr_tkfit_gap10_dedx_Y >= 2.5 && shr_tkfit_gap10_dedx_Y < 3.5 ) {
-  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-  //   }
-  //   else if ( shr_tkfit_gap10_dedx_Y >= 3.5 && shr_tkfit_gap10_dedx_Y < 4.7 ) {
-  //     dist_and_dEdx_ok = false;
-  //   }
-  //   else if ( shr_tkfit_gap10_dedx_Y >= 4.7 ) {
-  //     if ( shr_distance > 3.0 ) dist_and_dEdx_ok = false;
-  //   }
-  //   else dist_and_dEdx_ok = false;
-  // }
-  // else {
-  //   // no track, 1D dE/dx cut
-  //   if ( shr_tkfit_gap10_dedx_Y < 1.7 ) dist_and_dEdx_ok = false;
-  //   if ( shr_tkfit_gap10_dedx_Y > 2.7 && shr_tkfit_gap10_dedx_Y < 5.5 ) {
-  //     dist_and_dEdx_ok = false;
-  //   }
-  // }
+        if ( pmag2 > best_pmag2 ) {
+          best_pmag2 = pmag2;
+          best_idx   = i;
+        }
+      }
 
-  // bool sel_pass_electron_identification = moliere_ok && dist_and_dEdx_ok;
+      if ( best_idx >= 0 ) {
+        mc_px_0 = mc_px_vec->at( best_idx );
+        mc_py_0 = mc_py_vec->at( best_idx );
+        mc_pz_0 = mc_pz_vec->at( best_idx );
+        has_truth_momentum = true;
+      }
+    }
+  }
+  catch ( const std::exception& ) {}
 
-  // Flag indicating whether the event passed the full selection
-  // bool sel_nu_e_cc = sel_pass_preselection && sel_pass_cosmic_rejection
-  //   && sel_pass_shower_identification && sel_pass_electron_identification;
+  // Convert true proton total energy to kinetic energy by subtracting
+  // the proton mass, matching what pandora_reco_track_energy and
+  // wc_reco_track_energy store (both are KE, not total energy)
+  float true_proton_ke = ( true_proton_e != static_cast<float>( BOGUS ) )
+    ? true_proton_e - static_cast<float>( PROTON_MASS ) : BOGUS;
 
-  bool sel_nu_e_cc = sel_pass_preselection && sel_pass_cosmic_rejection
-    && sel_pass_other;
+  // True cos(opening angle) between the true electron and leading proton
+  double true_cos_opening_angle = BOGUS;
+  if ( has_truth_momentum ) {
+    float emag = std::sqrt( elec_px*elec_px + elec_py*elec_py + elec_pz*elec_pz );
+    float pmag = std::sqrt( mc_px_0*mc_px_0 + mc_py_0*mc_py_0 + mc_pz_0*mc_pz_0 );
+    if ( emag > 0.f && pmag > 0.f ) {
+      float dot = elec_px*mc_px_0 + elec_py*mc_py_0 + elec_pz*mc_pz_0;
+      float cos_theta = dot / ( emag * pmag );
+      if ( cos_theta > 1.f ) cos_theta = 1.f;
+      else if ( cos_theta < -1.f ) cos_theta = -1.f;
+      true_cos_opening_angle = cos_theta;
+    }
+  }
 
-  // // Set the reco energy of the electron candidate if we found one
-  // double reco_electron_energy = BOGUS;
-  // if ( sel_pass_shower_identification ) {
-  //   // Apply the shower energy correction factor
-  //   reco_electron_energy = shr_energy_cali / 0.83;
-  // }
+  // Is the reco neutrino vertex in the fiducial volume?
+  bool pandora_in_fv = this->get_fv().is_inside(
+    pandora_nu_vx, pandora_nu_vy, pandora_nu_vz );
+  bool wc_in_fv = this->get_fv().is_inside(
+    wc_nu_vx, wc_nu_vy, wc_nu_vz );
 
-  // Set the reco energy of the electron candidate if we found one
+  ////////// PANDORA SELECTION //////////
+
+  static const std::string quality_cuts(
+    "swtrig_pre==1 && slice_orig_pass_id==1 && contained_fraction > 0.9" );
+
+  static const std::string signal_definition_cuts(
+    "n_showers_contained==1 && n_tracks_contained > 0 &&"
+    " shr_energy_tot_cali > 0.07 && trk_energy > 0.04" );
+
+  // Properly reject sentinel values for shower Molière angle 
+  static const std::string bdt_loose_cuts_scalar(
+    "shrmoliereavg < 15 && shrmoliereavg > -3.4e37 && tksh_distance < 12" );
+
+  // BDT score is precomputed in scripts/compute_bdt_scores.py and stored
+  // in the Pandora tree as "bdt_score".
+  float bdt_score = 0.f;
+  try {
+    pandora.at( "bdt_score" ) >> bdt_score;
+  }
+  catch ( const std::exception& ) {
+    // If preprocessing has not been run, keep default score and fail cut.
+    bdt_score = 0.f;
+  }
+
+  const bool beam_mode_is_rhc = ( beam_mode_ == "RHC" );
+  const float bdt_score_cut = beam_mode_is_rhc ? 0.500f : 0.475f;
+
+  // Reproduce the Python trksemlbl logic by taking the value associated
+  // with the leading-track index (trk_id is one-based in the ntuple).
+  float trksemlbl = 9999.f;
+  std::uint32_t trk_id_u = 0u;
+  pandora.at( "trk_id" ) >> trk_id_u;
+  const int trk_idx = static_cast<int>( trk_id_u ) - 1;
+
+  if ( trk_idx < 0 ) {
+    trksemlbl = 9999.f;
+  } else {
+    bool semlbl_ok = read_track_value_as_float( pandora, "pfng2semlabel", trk_idx, trksemlbl );
+    if ( !semlbl_ok ) trksemlbl = 9999.f;
+  }
+
+  // PANDORA QUALITY CUTS
+  bool pandora_pass_quality = pandora_in_fv
+    && pandora.formula( quality_cuts );
+
+  // PANDORA SIGNAL DEFINITION CONSTRAINTS
+  bool pandora_pass_sig = pandora.formula( signal_definition_cuts );
+
+  // PANDORA PRESELECTION = quality cuts + signal definition constraints
+  bool pandora_pass_pre = pandora_pass_quality
+    && pandora_pass_sig;
+
+  // PANDORA BDT LOOSE CUTS
+  bool pandora_pass_bdt_loose = pandora_pass_pre
+    && pandora.formula( bdt_loose_cuts_scalar )
+    && ( trksemlbl == 1.f );
+
+  // Beam-mode-dependent BDT score requirement
+  bool pandora_pass_bdt_score = ( bdt_score > bdt_score_cut );
+
+  // Final Pandora selection flag
+  bool pandora_sel = pandora_pass_bdt_loose
+    && pandora_pass_bdt_score;
+
+  ////////// CUTFLOW COUNTERS //////////
+
+  ++n_total_;
+  if ( pandora_pass_quality ) ++n_pass_quality_;
+  if ( pandora_pass_sig ) ++n_pass_sig_;
+  if ( pandora_pass_pre ) ++n_pass_pre_;
+  if ( pandora_pass_bdt_loose ) ++n_pass_bdt_loose_;
+  if ( pandora_pass_bdt_score ) ++n_pass_bdt_score_;
+  if ( pandora_sel ) ++n_pass_final_;
+
+  ////////// WC SELECTION //////////
+
+  // WC QUALITY CUTS
+  static const std::string wc_quality_cuts_bdt_vars( "numu_cc_flag >= 0" );
+  static const std::string wc_quality_cuts_eval( "match_isFC == 1" );
+
+  bool wc_pass_quality_bdt
+    = bdt_vars.formula( wc_quality_cuts_bdt_vars );
+  bool wc_pass_quality_eval
+    = eval.formula( wc_quality_cuts_eval );
+  bool wc_pass_quality = wc_in_fv
+    && wc_pass_quality_bdt
+    && wc_pass_quality_eval;
+
+  // WC SIGNAL DEFINITION CONSTRAINTS
+  WcRecoCounts wc_reco_counts = populate_wc_reco_counters( pf_eval );
+
+  bool wc_pass_sig_pf = ( wc_reco_counts.reco_electron == 1 )
+    && ( wc_reco_counts.reco_proton > 0 ) && ( wc_reco_counts.reco_mu == 0 )
+    && ( wc_reco_counts.reco_pi == 0 ) && ( wc_reco_counts.reco_pi0 == 0 );
+
+  bool wc_pass_sig = wc_pass_sig_pf;
+
+  // WC PRESELECTION = quality cuts + signal-definition constraints
+  bool wc_pass_pre = wc_pass_quality && wc_pass_sig;
+
+  // WC BDT SCORE
+  bool wc_pass_bdt = bdt_vars.formula( "nue_score > 7" );
+
+  bool wc_sel = wc_pass_pre && wc_pass_bdt;
+
+  ////////// UNION SELECTION //////////
+
+  bool sel_nue_cc_union = pandora_sel || wc_sel;
+  bool sel_nue_cc_intersection = pandora_sel && wc_sel;
+  bool sel_nue_cc = sel_nue_cc_union;
+
+  ////////// VARIABLE INITIALIZATION //////////
+
   double reco_electron_energy = BOGUS;
-  if ( sel_nu_e_cc ) {
-    // Apply the shower energy correction factor
-    reco_electron_energy = shr_energy_cali / 0.83;
+  bool reco_electron_energy_is_pandora = false;
+
+  double reco_track_energy = BOGUS;
+  bool reco_track_energy_is_pandora = false;
+
+  double reco_opening_angle = BOGUS;
+  bool reco_opening_angle_is_pandora = false;
+
+  ////////// CORRECTIONS //////////
+
+  // Pandora electron energy: shr_energy_cali / 0.83 applied for all events
+  // (matches Python notebook which applies this scaling to all MC + data)
+  const double pandora_reco_electron_energy = pandora_sel
+    ? pandora_shr_energy_cali / 0.83 : BOGUS;
+
+  // WireCell shower KE: read for all events regardless of file type
+  // so it is available for MC plots.
+  // The 0.95 data correction is applied only for real data (onBNB/extBNB),
+  // matching the Python notebook which scales data/ext but not MC.
+  bool is_real_data = ( file_type_ == "onBNB" || file_type_ == "extBNB" );
+
+  float wc_reco_shower_ke = BOGUS;
+  try {
+    pf_eval.at( "reco_showerKE" ) >> wc_reco_shower_ke;
+  }
+  catch ( const std::exception& ) {}
+
+  double wc_reco_electron_energy = BOGUS;
+  if ( wc_sel ) {
+    wc_reco_electron_energy = is_real_data
+      ? wc_reco_shower_ke * 0.95
+      : wc_reco_shower_ke;
+  }
+
+  // Pandora track energy
+  const double pandora_reco_track_energy = pandora_sel
+    ? pandora_trk_energy : BOGUS;
+
+  // WireCell proton and shower momenta — read for all events (MC and data)
+  const bool has_reco_proton_momentum = pf_eval.formula(
+    "reco_protonMomentum[3] > 0" );
+  const bool has_reco_shower_momentum = pf_eval.formula(
+    "reco_showerMomentum[3] > 0" );
+
+  double wc_reco_track_energy = BOGUS;
+  if ( wc_sel && has_reco_proton_momentum ) {
+    ArrayView< float > wc_reco_proton_momentum;
+    pf_eval.at( "reco_protonMomentum" ) >> wc_reco_proton_momentum;
+    if ( wc_reco_proton_momentum.size() > 3 ) {
+      float wc_proton_total_energy = wc_reco_proton_momentum[ 3 ];
+      wc_reco_track_energy = wc_proton_total_energy - PROTON_MASS;
+    }
+  }
+
+  // WireCell opening angle — read for all events (MC and data)
+  double wc_reco_opening_angle = BOGUS;
+  if ( wc_sel && has_reco_shower_momentum && has_reco_proton_momentum ) {
+    ArrayView< float > wc_reco_shower_momentum;
+    ArrayView< float > wc_reco_proton_momentum;
+    pf_eval.at( "reco_showerMomentum" ) >> wc_reco_shower_momentum;
+    pf_eval.at( "reco_protonMomentum" ) >> wc_reco_proton_momentum;
+
+    if ( wc_reco_shower_momentum.size() > 3 && wc_reco_proton_momentum.size() > 3 ) {
+      float shower_px = wc_reco_shower_momentum[ 0 ];
+      float shower_py = wc_reco_shower_momentum[ 1 ];
+      float shower_pz = wc_reco_shower_momentum[ 2 ];
+
+      float proton_px = wc_reco_proton_momentum[ 0 ];
+      float proton_py = wc_reco_proton_momentum[ 1 ];
+      float proton_pz = wc_reco_proton_momentum[ 2 ];
+
+      float dot_product = shower_px * proton_px + shower_py * proton_py
+        + shower_pz * proton_pz;
+
+      float shower_mag = std::sqrt( shower_px * shower_px
+        + shower_py * shower_py + shower_pz * shower_pz );
+      float proton_mag = std::sqrt( proton_px * proton_px
+        + proton_py * proton_py + proton_pz * proton_pz );
+
+      if ( shower_mag > 0 && proton_mag > 0 ) {
+        float cos_theta = dot_product / ( shower_mag * proton_mag );
+        if ( cos_theta > 1.f ) cos_theta = 1.f;
+        else if ( cos_theta < -1.f ) cos_theta = -1.f;
+        wc_reco_opening_angle = cos_theta;
+      }
+    }
+  }
+
+  ////////// RECO VARIABLE CHOICE //////////
+
+  // ELECTRON ENERGY
+  if ( pandora_sel && wc_sel ) {
+    if ( use_pandora_overlap_e ) {
+      reco_electron_energy = pandora_reco_electron_energy;
+      reco_electron_energy_is_pandora = true;
+    }
+    else {
+      reco_electron_energy = wc_reco_electron_energy;
+    }
+  }
+  else if ( pandora_sel ) {
+    reco_electron_energy = pandora_reco_electron_energy;
+    reco_electron_energy_is_pandora = true;
+  }
+  else if ( wc_sel ) {
+    reco_electron_energy = wc_reco_electron_energy;
+  }
+
+  // LEADING PROTON KINETIC ENERGY
+  if ( pandora_sel && wc_sel ) {
+    if ( use_pandora_overlap_lead_p_ke ) {
+      reco_track_energy = pandora_reco_track_energy;
+      reco_track_energy_is_pandora = true;
+    }
+    else {
+      reco_track_energy = BOGUS;
+    }
+  }
+  else if ( pandora_sel ) {
+    reco_track_energy = pandora_reco_track_energy;
+    reco_track_energy_is_pandora = true;
+  }
+  else if ( wc_sel ) {
+    reco_track_energy = wc_reco_track_energy;
+  }
+
+  // OPENING ANGLE
+  const double pandora_reco_opening_angle = pandora_sel
+    ? pandora_tksh_angle : BOGUS;
+
+  if ( pandora_sel && wc_sel ) {
+    if ( use_pandora_overlap_angle ) {
+      reco_opening_angle = pandora_reco_opening_angle;
+      reco_opening_angle_is_pandora = true;
+    }
+    else {
+      reco_opening_angle = BOGUS;
+    }
+  }
+  else if ( pandora_sel ) {
+    reco_opening_angle = pandora_reco_opening_angle;
+    reco_opening_angle_is_pandora = true;
+  }
+  else if ( wc_sel ) {
+    reco_opening_angle = wc_reco_opening_angle;
   }
 
   // We're done. Store the results in the output tree and return whether the
   // event passed the full selection
   auto& out = ev.out();
-  out[ "sel_pass_preselection" ] = sel_pass_preselection;
-  out[ "sel_pass_cosmic_rejection" ] = sel_pass_cosmic_rejection;
-  out[ "sel_pass_other" ] = sel_pass_other;
-  out[ "sel_nu_e_cc" ] = sel_nu_e_cc;
+  int run = BOGUS_INDEX;
+  int sub = BOGUS_INDEX;
+  int evt = BOGUS_INDEX;
+  pandora.at( "run" ) >> run;
+  pandora.at( "sub" ) >> sub;
+  pandora.at( "evt" ) >> evt;
+  out[ "run" ] = run;
+  out[ "sub" ] = sub;
+  out[ "evt" ] = evt;
+
+  // Pandora selection outputs
+  out[ "pandora_pass_quality" ] = pandora_pass_quality;
+  out[ "pandora_pass_pre" ] = pandora_pass_pre;
+  out[ "pandora_pass_sig" ] = pandora_pass_sig;
+  out[ "pandora_pass_bdt_loose" ] = pandora_pass_bdt_loose;
+  out[ "pandora_pass_bdt_score" ] = pandora_pass_bdt_score;
+  out[ "beam_mode_is_rhc" ] = beam_mode_is_rhc;
+  out[ "pandora_bdt_score_cut" ] = bdt_score_cut;
+  out[ "pandora_sel_nue_cc" ] = pandora_sel;
+
+  // WC selection outputs
+  out[ "wc_pass_quality" ] = wc_pass_quality;
+  out[ "wc_pass_sig" ] = wc_pass_sig;
+  out[ "wc_pass_pre" ] = wc_pass_pre;
+  out[ "wc_pass_bdt" ] = wc_pass_bdt;
+  out[ "wc_sel_nue_cc" ] = wc_sel;
+
+  // Combined selection outputs (Pandora OR WC)
+  out[ "sel_nue_cc_union" ] = sel_nue_cc_union;
+  out[ "sel_nue_cc_intersection" ] = sel_nue_cc_intersection;
+
+  // Main selection variable (final selection)
+  out[ "sel_nue_cc" ] = sel_nue_cc;
+
+  // BDT score
+  out[ "bdt_score" ] = bdt_score;
+
+  // Electron energy
+  out[ "pandora_reco_electron_energy" ] = pandora_reco_electron_energy;
+  out[ "wc_reco_electron_energy" ] = wc_reco_electron_energy;
+  out[ "wc_reco_shower_ke" ] = wc_reco_shower_ke;
   out[ "reco_electron_energy" ] = reco_electron_energy;
 
-  return sel_nu_e_cc;
+  // Leading proton kinetic energy
+  out[ "pandora_reco_track_energy" ] = pandora_reco_track_energy;
+  out[ "wc_reco_track_energy" ] = wc_reco_track_energy;
+  out[ "reco_track_energy" ] = reco_track_energy;
+
+  // Opening angle between electron and leading proton
+  out[ "pandora_reco_opening_angle" ] = pandora_reco_opening_angle;
+  out[ "wc_reco_opening_angle" ] = wc_reco_opening_angle;
+  out[ "reco_opening_angle" ] = reco_opening_angle;
+
+  // Flags for whether the chosen reco variable came from Pandora or WC
+  out[ "reco_electron_energy_is_pandora" ] = reco_electron_energy_is_pandora;
+  out[ "reco_track_energy_is_pandora" ] = reco_track_energy_is_pandora;
+  out[ "reco_opening_angle_is_pandora" ] = reco_opening_angle_is_pandora;
+
+  // Truth variables for resolution studies
+  // BOGUS for extBNB and any file where truth branches are absent
+  out[ "true_elec_e" ] = true_elec_e;
+  out[ "true_proton_ke" ] = true_proton_ke;
+  out[ "true_cos_opening_angle" ] = true_cos_opening_angle;
+
+  std::string cat = categorize_event(ev);
+  out["NuMICC1eNp_Cats"] = cat;
+  out["is_true_signal"] = (cat == "#nu_{e} CC0#piNp");
+
+  // Integer event category for UniverseMaker compatibility.
+  // Values match the order in configs/selections.conf for NuMICC1eNp.
+  static const std::map<std::string, int> cat_to_int = {
+    { "#nu_{e} CC0#piNp",       1 },
+    { "#bar{#nu}_{e} CC0#piNp", 2 },
+    { "#bar{#nu}_{e} CC Other", 3 },
+    { "#nu_{e} CC Other",       4 },
+    { "#nu_{#mu} CC #pi^{0}",   5 },
+    { "#nu_{#mu} CC Other",     6 },
+    { "NC #pi^{0}",             7 },
+    { "NC Other",               8 },
+    { "Out FV",                 9 },
+    { "Unknown",               10 },
+  };
+  auto cat_it = cat_to_int.find( cat );
+  int cat_int = ( cat_it != cat_to_int.end() ) ? cat_it->second : 0;
+  out["NuMICC1eNp_EventCategory"] = cat_int;
+
+  // Branches required by UniverseMaker to correctly apply CV weights.
+  // is_mc is read from the environment variable set by ProcessNTuples.
+  const char* file_type_env = std::getenv( "XSEC_ANALYZER_FILE_TYPE" );
+  std::string file_type_str = file_type_env ? file_type_env : "unknown";
+  bool is_mc_flag = ( file_type_str != "onBNB" && file_type_str != "extBNB" );
+  out["is_mc"] = is_mc_flag;
+
+  // GENIE tune CV weight
+  float tuned_cv_weight = 1.f;
+  if ( is_mc_flag ) {
+    try { pandora.at( "weightTune" ) >> tuned_cv_weight; }
+    catch (...) { tuned_cv_weight = 1.f; }
+  }
+  out["tuned_cv_weight"] = tuned_cv_weight;
+
+  // PPFX CV weight (NuMI-specific)
+  float ppfx_cv_weight = 1.f;
+  if ( is_mc_flag ) {
+    try { pandora.at( "ppfx_cv" ) >> ppfx_cv_weight; }
+    catch (...) { ppfx_cv_weight = 1.f; }
+  }
+  out["ppfx_cv_weight"] = ppfx_cv_weight;
+
+  // Normalisation weight (0.65 for dirt MC, 1.0 otherwise)
+  float normalisation_weight = 1.f;
+  if ( file_type_str == "dirtMC" ) normalisation_weight = 0.65f;
+  out["normalisation_weight"] = normalisation_weight;
+
+  // Copy all entries from the weights map into individual branches with
+  // "weight_" prefix. WeightHandler automatically picks up any branch
+  // whose name begins with "weight_", so this makes all systematic
+  // universe weights available to UniverseMaker without hardcoding names.
+  if ( is_mc_flag ) {
+    std::map<std::string, std::vector<double>>* wm = nullptr;
+    try {
+      pandora.at( "weights" ) >> wm;
+      if ( wm ) {
+        for ( const auto& wgt_pair : *wm ) {
+          out[ "weight_" + wgt_pair.first ] = wgt_pair.second;
+        }
+      }
+    }
+    catch (...) {}
+  }
+
+  return sel_nue_cc;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
+
+  int nu_pdg, ccnc, nproton, npion, npi0;
+  float nu_x, nu_y, nu_z, Ee;
+
+  const auto& in = ev.in();
+
+  in.at( "nu_pdg" ) >> nu_pdg;
+  in.at( "ccnc" ) >> ccnc;
+  in.at( "nproton" ) >> nproton;
+  in.at( "npion" ) >> npion;
+  in.at( "npi0" ) >> npi0;
+  in.at( "elec_e" ) >> Ee;
+  in.at( "true_nu_vtx_x" ) >> nu_x;
+  in.at( "true_nu_vtx_y" ) >> nu_y;
+  in.at( "true_nu_vtx_z" ) >> nu_z;
+
+  bool sig_inFV = this->get_fv().is_inside( nu_x, nu_y, nu_z );
+  bool sig_isNuE = (nu_pdg == ELECTRON_NEUTRINO);
+  bool sig_isCC = (ccnc == CHARGED_CURRENT);
+
+  bool is_signal = sig_inFV && sig_isNuE && sig_isCC
+                && (Ee > 0.070)
+                && (nproton > 0)
+                && (npion == 0)
+                && (npi0 == 0);
+
+  if ( !sig_inFV ) {
+    return "Out FV";
+  }
+  else if ( !sig_isCC ) {
+    if ( npi0 > 0 ) return "NC #pi^{0}";
+    else return "NC Other";
+  }
+  else if ( nu_pdg == ELECTRON_NEUTRINO ) {
+    if ( is_signal ) return "#nu_{e} CC0#piNp";
+    else return "#nu_{e} CC Other";
+  }
+  else if ( nu_pdg == ELECTRON_ANTINEUTRINO ) {
+    if ( nproton > 0 && npion == 0 && npi0 == 0 ) return "#bar{#nu}_{e} CC0#piNp";
+    else return "#bar{#nu}_{e} CC Other";
+  }
+  else if ( std::abs(nu_pdg) == MUON_NEUTRINO ) {
+    if ( npi0 > 0 ) return "#nu_{#mu} CC #pi^{0}";
+    else return "#nu_{#mu} CC Other";
+  }
+
+  std::cout << "Warning: Unknown event! Check the categorization logic.\n";
+  return "Unknown";
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+NuMICC1eNp::~NuMICC1eNp() {
+  std::cout << "\n==============================\n";
+  std::cout << "  PANDORA CUTFLOW (final)\n";
+  std::cout << "==============================\n";
+  std::cout << "  total events:    " << n_total_ << "\n"
+            << "  pass quality:    " << n_pass_quality_ << "\n"
+            << "  pass sig:        " << n_pass_sig_ << "\n"
+            << "  pass pre:        " << n_pass_pre_ << "\n"
+            << "  pass bdt_loose:  " << n_pass_bdt_loose_ << "\n"
+            << "  pass bdt_score:  " << n_pass_bdt_score_ << "\n"
+            << "  pass final:      " << n_pass_final_ << "\n";
 }
