@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <vector>
 
 // Needed for the weight range limits used in DEFAULT_MC_EVENT_WEIGHT. We pull
 // them from the UniverseMaker header file to ensure consistency
