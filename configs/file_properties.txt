@@ -7,11 +7,11 @@
 # Standard overlay
 /exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4b_v10_04_07_20_NuMI_RHC_nu_overlay_patch_retuple_retuple_hist_bdt_weighted.root 1 numuMC
 # Beam on (fake data - nueMC as proxy while blinded)
-/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4b_NuMI_RHC_nue_overlay_surprise_v10_04_07_09_reco2_hist_bdt_weighted.root 1 onBNB 5418188.0 2.527e+20
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4b_NuMI_RHC_nue_overlay_surprise_v10_04_07_09_reco2_hist_bdt_weighted_fake.root 1 onBNB 5418188 2.527e20
 # Beam off
-/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4b_NuMI_beam_off_RHC_data_surprise_v10_04_07_09_reco2_hist_bdt_weighted.root 1 extBNB 15770854.05 0
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4b_NuMI_beam_off_RHC_data_surprise_v10_04_07_09_reco2_hist_bdt_weighted.root 1 extBNB 15770854 0
 # Dirt
-/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4a4c_NuMI_RHC_dirt_overlay_surprise_reco2_hist_4b_bdt_weighted.root 1 dirtMC
+# /exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4a4c_NuMI_RHC_dirt_overlay_surprise_reco2_hist_4b_bdt_weighted.root 1 dirtMC
 #############################################################################################
 # Detvars
 # These have 'nueDV' at the end

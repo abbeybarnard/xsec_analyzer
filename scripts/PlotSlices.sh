@@ -37,4 +37,16 @@ if [ ! -d "${PlotOutputDir}" ]; then
   exit 5
 fi
 
+# SystematicsCalculator caches its POT-summed universes in a 'total_*'
+# TDirectoryFile inside Univ_File the first time it's used, then silently
+# reuses that cache forever after -- even once file_properties.txt, the
+# systematics config, or the selection code have changed. Force a rebuild by
+# default so this never serves stale numbers without you noticing. Set
+# XSEC_ALLOW_CACHE=1 to skip this (e.g. for a final, already-validated
+# large-scale run where you want the speed of reusing the existing cache).
+if [ -z "${XSEC_ALLOW_CACHE:-}" ]; then
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  root -l -b -q "${SCRIPT_DIR}/invalidate_total_cache.C(\"${Univ_File}\")"
+fi
+
 SlicePlots ${FPM_Config} ${SYST_Config} ${SLICE_Config} ${Univ_File} ${PlotOutputDir}
