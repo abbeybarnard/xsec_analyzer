@@ -21,6 +21,11 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Python virtual environments
+.analysis_venv/
+venv/
+.venv/
+
 # Compiled object files
 *.d
 
