@@ -1,5 +1,31 @@
+// Standard library includes
+#include <sstream>
+
 // XSecAnalyzer includes
 #include "XSecAnalyzer/SystematicsCalculator.hh"
+
+// Reads the covariance matrix configuration file into a stringstream,
+// skipping blank lines and lines whose first non-whitespace character is
+// '#'. This allows individual covariance matrix definitions to be commented
+// out, matching the comment convention used elsewhere in this codebase
+// (e.g., FilePropertiesManager, SelectionBase).
+std::istringstream strip_comments_from_config_file(
+  const std::string& file_name )
+{
+  std::ifstream in_file( file_name );
+  std::stringstream stripped;
+
+  std::string line;
+  while ( std::getline( in_file, line ) ) {
+    size_t first_non_space = line.find_first_not_of( " \t" );
+    if ( first_non_space == std::string::npos
+      || line.at( first_non_space ) == '#' ) continue;
+
+    stripped << line << '\n';
+  }
+
+  return std::istringstream( stripped.str() );
+}
 
 void set_stats_and_dir( Universe& univ ) {
   univ.hist_reco_->SetStats( false );
@@ -465,7 +491,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // pulling it out of the original ntuple file
           TFile temp_mc_file( file_name.c_str(), "read" );
           TParameter<float>* temp_pot = nullptr;
-          temp_mc_file.GetObject( "summed_pot", temp_pot );
+          // temp_mc_file.GetObject( "summed_pot", temp_pot );
+          temp_mc_file.GetObject( "XSecAnalyzer/summed_pot", temp_pot );
           if ( !temp_pot ) throw std::runtime_error(
             "Missing POT in MC file!" );
           file_pot = temp_pot->GetVal();
@@ -1142,7 +1169,8 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
   // Read in the definition of each covariance matrix and calculate it. Each
   // definition contains at least a name and a type specifier
-  std::ifstream config_file( syst_config_file_name_ );
+  std::istringstream config_file
+    = strip_comments_from_config_file( syst_config_file_name_ );
   std::string name, type;
   while ( config_file >> name >> type ) {
 
@@ -1580,7 +1608,8 @@ void SystematicsCalculator::dump_universe_observables(
 
   // Organize the universes based on the covariance matrix configuration. Each
   // definition contains at least a name and a type specifier
-  std::ifstream config_file( syst_config_file_name_ );
+  std::istringstream config_file
+    = strip_comments_from_config_file( syst_config_file_name_ );
   std::string name, type;
   while ( config_file >> name >> type ) {
 

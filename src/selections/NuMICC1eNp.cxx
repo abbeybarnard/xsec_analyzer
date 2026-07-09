@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <stdexcept>
 
 #include "XSecAnalyzer/Constants.hh"
@@ -269,6 +270,26 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   ////////// PANDORA SELECTION //////////
 
+  // Read each Pandora selection variable explicitly into a local float so it
+  // can be written to the output tree unconditionally. The formula strings
+  // below still drive the actual cuts — these reads are independent.
+  float var_swtrig_pre       = 9999.f;
+  float var_slice_id         = 9999.f;
+  float var_contained_frac   = 9999.f;
+  float var_n_showers        = 9999.f;
+  float var_n_tracks         = 9999.f;
+  float var_shr_energy_tot   = 9999.f;
+  float var_shrmoliereavg    = 9999.f;
+  float var_tksh_distance    = 9999.f;
+  try { pandora.at( "swtrig_pre" )          >> var_swtrig_pre;     } catch (...) {}
+  try { pandora.at( "slice_orig_pass_id" )  >> var_slice_id;       } catch (...) {}
+  try { pandora.at( "contained_fraction" )  >> var_contained_frac; } catch (...) {}
+  try { pandora.at( "n_showers_contained" ) >> var_n_showers;      } catch (...) {}
+  try { pandora.at( "n_tracks_contained" )  >> var_n_tracks;       } catch (...) {}
+  try { pandora.at( "shr_energy_tot_cali" ) >> var_shr_energy_tot; } catch (...) {}
+  try { pandora.at( "shrmoliereavg" )       >> var_shrmoliereavg;  } catch (...) {}
+  try { pandora.at( "tksh_distance" )       >> var_tksh_distance;  } catch (...) {}
+
   static const std::string quality_cuts(
     "swtrig_pre==1 && slice_orig_pass_id==1 && contained_fraction > 0.9" );
 
@@ -342,6 +363,14 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   if ( pandora_sel ) ++n_pass_final_;
 
   ////////// WC SELECTION //////////
+
+  // Read WC selection variables explicitly for output.
+  float var_wc_numu_cc_flag = 9999.f;
+  float var_wc_match_isFC   = 9999.f;
+  float var_wc_nue_score    = 9999.f;
+  try { bdt_vars.at( "numu_cc_flag" ) >> var_wc_numu_cc_flag; } catch (...) {}
+  try { eval.at( "match_isFC" )       >> var_wc_match_isFC;   } catch (...) {}
+  try { bdt_vars.at( "nue_score" )    >> var_wc_nue_score;    } catch (...) {}
 
   // WC QUALITY CUTS
   static const std::string wc_quality_cuts_bdt_vars( "numu_cc_flag >= 0" );
@@ -471,60 +500,33 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 
   ////////// RECO VARIABLE CHOICE //////////
 
+  const bool use_pandora_e     = pandora_sel && ( !wc_sel || use_pandora_overlap_e );
+  const bool use_pandora_p_ke  = pandora_sel && ( !wc_sel || use_pandora_overlap_lead_p_ke );
+  const bool use_pandora_angle = pandora_sel && ( !wc_sel || use_pandora_overlap_angle );
+
+  const double pandora_reco_opening_angle = pandora_sel ? pandora_tksh_angle : BOGUS;
+
   // ELECTRON ENERGY
-  if ( pandora_sel && wc_sel ) {
-    if ( use_pandora_overlap_e ) {
-      reco_electron_energy = pandora_reco_electron_energy;
-      reco_electron_energy_is_pandora = true;
-    }
-    else {
-      reco_electron_energy = wc_reco_electron_energy;
-    }
-  }
-  else if ( pandora_sel ) {
+  if ( use_pandora_e ) {
     reco_electron_energy = pandora_reco_electron_energy;
     reco_electron_energy_is_pandora = true;
-  }
-  else if ( wc_sel ) {
+  } else if ( wc_sel ) {
     reco_electron_energy = wc_reco_electron_energy;
   }
 
   // LEADING PROTON KINETIC ENERGY
-  if ( pandora_sel && wc_sel ) {
-    if ( use_pandora_overlap_lead_p_ke ) {
-      reco_track_energy = pandora_reco_track_energy;
-      reco_track_energy_is_pandora = true;
-    }
-    else {
-      reco_track_energy = BOGUS;
-    }
-  }
-  else if ( pandora_sel ) {
+  if ( use_pandora_p_ke ) {
     reco_track_energy = pandora_reco_track_energy;
     reco_track_energy_is_pandora = true;
-  }
-  else if ( wc_sel ) {
+  } else if ( wc_sel ) {
     reco_track_energy = wc_reco_track_energy;
   }
 
   // OPENING ANGLE
-  const double pandora_reco_opening_angle = pandora_sel
-    ? pandora_tksh_angle : BOGUS;
-
-  if ( pandora_sel && wc_sel ) {
-    if ( use_pandora_overlap_angle ) {
-      reco_opening_angle = pandora_reco_opening_angle;
-      reco_opening_angle_is_pandora = true;
-    }
-    else {
-      reco_opening_angle = BOGUS;
-    }
-  }
-  else if ( pandora_sel ) {
+  if ( use_pandora_angle ) {
     reco_opening_angle = pandora_reco_opening_angle;
     reco_opening_angle_is_pandora = true;
-  }
-  else if ( wc_sel ) {
+  } else if ( wc_sel ) {
     reco_opening_angle = wc_reco_opening_angle;
   }
 
@@ -645,22 +647,100 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
   if ( file_type_str == "dirtMC" ) normalisation_weight = 0.65f;
   out["normalisation_weight"] = normalisation_weight;
 
-  // Copy all entries from the weights map into individual branches with
-  // "weight_" prefix. WeightHandler automatically picks up any branch
-  // whose name begins with "weight_", so this makes all systematic
-  // universe weights available to UniverseMaker without hardcoding names.
+  // Copy only the weight branches listed in systcalc_numi.conf into the
+  // output tree with "weight_" prefix. Writing *all* weights from the map
+  // causes UniverseMaker to throw on unrecognised names (e.g. the PPFX
+  // sub-component branches such as weight_ppfx_mippk_PPFXMIPPKaon that
+  // are present in the input ntuples but not defined in the config).
+  //
+  // Three additional branches are required by UniverseMaker regardless of
+  // systcalc_numi.conf:
+  //   weight_TunedCentralValue_UBGenie -- checked by is_reweightable_mc_ntuple()
+  //                                       to determine whether to build universes
+  //   weight_splines_general_Spline    -- spline CV correction (SPLINE_WEIGHT_NAME)
+  //   weight_ppfx_cv_UBPPFXCV          -- PPFX CV weight universe (PPFX_WEIGHT_NAME)
   if ( is_mc_flag ) {
+    static const std::set<std::string> allowed_weights = {
+      // Required by UniverseMaker internally (TUNE/SPLINE/PPFX_WEIGHT_NAME)
+      "TunedCentralValue_UBGenie",
+      "splines_general_Spline",
+      "ppfx_cv_UBPPFXCV",
+      // Flux: PPFX total
+      "ppfx_all",
+      // Flux: beamline geometry
+      "Horn_2kA",
+      "Horn1_x_3mm",   "Horn1_y_3mm",
+      "Beam_spot_1_1mm", "Beam_spot_1_5mm",
+      "Horn2_x_3mm",   "Horn2_y_3mm",
+      "Horns_0mm_water", "Horns_2mm_water",
+      "Beam_shift_x_1mm", "Beam_shift_y_1mm",
+      "Target_z_7mm",
+      // Reinteraction
+      "reint_all",
+      // GENIE cross-section: multisim
+      "All_UBGenie",
+      // GENIE cross-section: unisims
+      "AxFFCCQEshape_UBGenie", "DecayAngMEC_UBGenie",
+      "NormCCCOH_UBGenie",     "NormNCCOH_UBGenie",
+      "RPA_CCQE_UBGenie",      "ThetaDelta2NRad_UBGenie",
+      "Theta_Delta2Npi_UBGenie", "VecFFCCQEshape_UBGenie",
+      "XSecShape_CCMEC_UBGenie",
+      // SCC
+      "xsr_scc_Fa3_SCC", "xsr_scc_Fv3_SCC",
+    };
+
     std::map<std::string, std::vector<double>>* wm = nullptr;
     try {
       pandora.at( "weights" ) >> wm;
       if ( wm ) {
         for ( const auto& wgt_pair : *wm ) {
-          out[ "weight_" + wgt_pair.first ] = wgt_pair.second;
+          if ( allowed_weights.count( wgt_pair.first ) ) {
+            out[ "weight_" + wgt_pair.first ] = wgt_pair.second;
+          }
         }
       }
     }
     catch (...) {}
   }
+
+  // -----------------------------------------------------------------------
+  // RAW SELECTION VARIABLES
+  //
+  // All raw inputs to the selection, written unconditionally for every event
+  // so they can be plotted at any cut stage in the notebook. They are never
+  // cut on here — use pandora_pass_* / wc_pass_* as stage gates when plotting.
+  // Sentinel 9999 means the branch was absent or reconstruction failed.
+  //
+  // In the notebook: tree.keys() filtered by startswith("var_") gives the
+  // full list.
+  // -----------------------------------------------------------------------
+
+  // Pandora quality cuts
+  out[ "var_pandora_swtrig_pre" ]     = var_swtrig_pre;
+  out[ "var_pandora_slice_id" ]       = var_slice_id;
+  out[ "var_pandora_contained_frac" ] = var_contained_frac;
+  // Pandora signal definition cuts
+  out[ "var_pandora_n_showers" ]      = var_n_showers;
+  out[ "var_pandora_n_tracks" ]       = var_n_tracks;
+  out[ "var_pandora_shr_energy_tot" ] = var_shr_energy_tot;
+  out[ "var_pandora_trk_energy" ]     = pandora_trk_energy;
+  // Pandora BDT loose cuts
+  out[ "var_pandora_shrmoliereavg" ]  = var_shrmoliereavg;
+  out[ "var_pandora_tksh_distance" ]  = var_tksh_distance;
+  out[ "var_pandora_trksemlbl" ]      = trksemlbl;
+  // Pandora BDT score
+  out[ "var_pandora_bdt_score" ]      = bdt_score;
+  // WC quality cuts
+  out[ "var_wc_numu_cc_flag" ]        = var_wc_numu_cc_flag;
+  out[ "var_wc_match_isFC" ]          = var_wc_match_isFC;
+  // WC signal definition counts
+  out[ "var_wc_reco_n_electron" ]     = wc_reco_counts.reco_electron;
+  out[ "var_wc_reco_n_proton" ]       = wc_reco_counts.reco_proton;
+  out[ "var_wc_reco_n_mu" ]           = wc_reco_counts.reco_mu;
+  out[ "var_wc_reco_n_pi" ]           = wc_reco_counts.reco_pi;
+  out[ "var_wc_reco_n_pi0" ]          = wc_reco_counts.reco_pi0;
+  // WC BDT score
+  out[ "var_wc_nue_score" ]           = var_wc_nue_score;
 
   return sel_nue_cc;
 }
