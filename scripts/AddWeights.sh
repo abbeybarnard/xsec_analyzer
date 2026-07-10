@@ -166,6 +166,14 @@ while IFS= read -r line || [ -n "$line" ]; do
             echo "  ✓ Done"
             ;;
 
+        detVar*)
+            echo "  → detVar file — copying as-is (no weights needed; DV-type"
+            echo "    systematics compare selected yields against detVarCV,"
+            echo "    they don't use the weight_* branches added here)..."
+            cp "${file_path}" "${OUTPUT_FILE}"
+            echo "  ✓ Done"
+            ;;
+
         *)
             echo "  WARNING: Unknown file type '${file_type}' — copying as-is."
             cp "${file_path}" "${OUTPUT_FILE}"

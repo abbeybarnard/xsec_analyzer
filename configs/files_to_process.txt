@@ -18,4 +18,15 @@
 #############################################################################################
 
 # Detvars
-# These have 'nueDV' at the end
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/checkout_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_cv_surprise_reco2_hist.root detVarCV RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyd_surprise_reco2_hist.root detVarLYdown RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyr_surprise_hist.root detVarLYrayl RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lya_surprise_reco2_hist.root detVarLYatten RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_recomb2_surprise_hist.root detVarRecomb2 RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_sce_surprise_hist.root detVarSCE RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMX_surprise_hist.root detVarWMX RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMYZ_surprise_hist.root detVarWMYZ RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaXZ_surprise_hist.root detVarWMAngleXZ RHC
+/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaYZ_surprise_hist.root detVarWMAngleYZ RHC
+
+#############################################################################################
