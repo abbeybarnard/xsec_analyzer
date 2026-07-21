@@ -299,18 +299,35 @@ def find_pandora_tree(tfile):
     """
     Locate the Pandora / NeutrinoSelectionFilter tree in *tfile*.
 
-    Tries the canonical path first; falls back to walking all TTrees and
-    picking the one that has the most required branches.
+    Tries the canonical path first. Some DetVar productions ("merge_det_..."
+    files) instead store every tree twice, suffixed "_cv" (a paired
+    central-value subset) and "_det" (the actual variation sample) -- for
+    those we explicitly prefer "_det", since this analysis gets its detVar
+    CV from the standalone detVarCV sample instead (see
+    SystematicsCalculator.cxx, where the alternate-CV logic is gated on
+    `!useNuMI`). Falls back to walking all TTrees and picking the one with
+    the most required branches only if neither convention matches.
 
     Returns
     -------
-    (path_str, TTree object)
+    (path_str, TTree object, suffix_str)
+    suffix_str is "_det" for merged-production files, "" otherwise. Sibling
+    trees ending in this suffix should be kept (and renamed by stripping the
+    suffix); their "_cv" counterparts should be dropped.
     """
     preferred = "nuselection/NeutrinoSelectionFilter"
     obj = tfile.Get(preferred)
     if obj and obj.InheritsFrom("TTree"):
         print(f"  Found Pandora tree at canonical path: {preferred}")
-        return preferred, obj
+        return preferred, obj, ""
+
+    det_path = preferred + "_det"
+    obj = tfile.Get(det_path)
+    if obj and obj.InheritsFrom("TTree"):
+        print(f"  Found Pandora tree at merged-DetVar path: {det_path}")
+        print(f"  (dropping paired '_cv' trees; using standalone detVarCV "
+              f"sample for the CV instead)")
+        return det_path, obj, "_det"
 
     required = {
         "shr_tkfit_dedx_Y",
@@ -351,7 +368,7 @@ def find_pandora_tree(tfile):
         )
 
     print(f"  Found Pandora tree (auto-detected): {best_path}")
-    return best_path, best_tree
+    return best_path, best_tree, ""
 
 
 # ---------------------------------------------------------------------------
@@ -380,13 +397,18 @@ def _get_or_mkdir(tfile, dir_path):
     return current
 
 
-def copy_tree_with_score(src_dir, tree_path, dst_dir, scores=None, max_events=None):
+def copy_tree_with_score(src_dir, tree_path, dst_dir, scores=None, max_events=None,
+                          output_name=None):
     """
-    Clone a TTree from src_dir into dst_dir.
+    Clone a TTree from src_dir into dst_dir, optionally renaming it to
+    *output_name* (used to strip a merged-production "_det" suffix so the
+    output file uses the canonical tree name expected downstream).
 
     dst_dir is already the correct directory -- do NOT recreate paths here.
     """
     tree_name = tree_path.split("/")[-1]
+    if output_name is None:
+        output_name = tree_name
 
     src_tree = src_dir.Get(tree_name)
     if not src_tree or not src_tree.InheritsFrom("TTree"):
@@ -400,8 +422,10 @@ def copy_tree_with_score(src_dir, tree_path, dst_dir, scores=None, max_events=No
         clone = src_tree.CloneTree(n_clone)
         if clone is None:
             raise RuntimeError(f"CloneTree failed for '{tree_path}'")
+        if output_name != tree_name:
+            clone.SetName(output_name)
         clone.Write("", ROOT.TObject.kOverwrite)
-        print(f"  Copied: {tree_path} ({clone.GetEntries()} entries)")
+        print(f"  Copied: {tree_path} -> {output_name} ({clone.GetEntries()} entries)")
         return clone
 
     # Case 2: add BDT score
@@ -413,6 +437,8 @@ def copy_tree_with_score(src_dir, tree_path, dst_dir, scores=None, max_events=No
     clone = src_tree.CloneTree(0)
     if clone is None:
         raise RuntimeError(f"CloneTree failed for '{tree_path}'")
+    if output_name != tree_name:
+        clone.SetName(output_name)
 
     bdt_val = array.array("f", [0.0])
     clone.Branch("bdt_score", bdt_val, "bdt_score/F")
@@ -426,11 +452,12 @@ def copy_tree_with_score(src_dir, tree_path, dst_dir, scores=None, max_events=No
             print(f"  Filled {i} entries in {tree_path}")
 
     clone.Write("", ROOT.TObject.kOverwrite)
-    print(f"  Copied: {tree_path} (+ bdt_score)")
+    print(f"  Copied: {tree_path} -> {output_name} (+ bdt_score)")
     return clone
 
 
-def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events, current_path=""):
+def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events,
+                            suffix="", current_path=""):
     """
     Recursively copy only the Pandora and WireCell parts of the file.
 
@@ -439,6 +466,9 @@ def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events
       - inside those, copy all TTrees except wcpselection/T_spacepoints
       - add bdt_score only to the Pandora tree
       - drop everything else
+      - if *suffix* is non-empty (merged CV/DetVar production files, see
+        find_pandora_tree), only trees ending in *suffix* are kept, renamed
+        by stripping the suffix; their paired "_cv" siblings are dropped.
     """
     for key in src_dir.GetListOfKeys():
         obj = key.ReadObj()
@@ -471,12 +501,26 @@ def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events
                 target_tree_path=target_tree_path,
                 score=score,
                 max_events=max_events,
+                suffix=suffix,
                 current_path=full_path,
             )
 
         elif obj.InheritsFrom("TTree"):
-            # Skip specific tree
-            if full_path == "wcpselection/T_spacepoints":
+            out_name = name
+            if suffix:
+                if name.endswith("_cv"):
+                    print(f"[DEBUG] Dropping paired-CV tree (standalone "
+                          f"detVarCV sample supplies the CV instead): {full_path}")
+                    continue
+                if name.endswith(suffix):
+                    out_name = name[: -len(suffix)]
+                else:
+                    print(f"[DEBUG] Warning: '{full_path}' has neither "
+                          f"'{suffix}' nor '_cv' suffix; copying unchanged")
+
+            # Skip specific tree (compare against the *renamed* output path)
+            out_full_path = f"{current_path}/{out_name}" if current_path else out_name
+            if out_full_path == "wcpselection/T_spacepoints":
                 print(f"[DEBUG] Skipping tree: {full_path}")
                 continue
 
@@ -488,6 +532,7 @@ def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events
                         dst_dir,
                         scores=score,
                         max_events=max_events,
+                        output_name=out_name,
                     )
                 else:
                     copy_tree_with_score(
@@ -496,6 +541,7 @@ def _copy_object_recursive(src_dir, dst_dir, target_tree_path, score, max_events
                         dst_dir,
                         scores=None,
                         max_events=max_events,
+                        output_name=out_name,
                     )
             except ValueError as e:
                 print(f"[DEBUG] Warning: {e}")
@@ -587,6 +633,35 @@ def read_files_to_process(list_path):
     return entries
 
 
+def _output_already_processed(output_file):
+    """
+    Return True if output_file already contains a complete, valid BDT-scored
+    Pandora tree (i.e. a previous run finished it successfully).
+
+    Used to make batch mode resumable: if one entry in files_to_process.txt
+    has a bad path and kills the run, re-running should skip everything that
+    already succeeded rather than reprocessing it from scratch.
+    """
+    output_file = Path(output_file)
+    if not output_file.exists() or output_file.stat().st_size == 0:
+        return False
+
+    tfile = ROOT.TFile.Open(str(output_file), "READ")
+    try:
+        if not tfile or tfile.IsZombie():
+            return False
+        try:
+            _, tree, _ = find_pandora_tree(tfile)
+        except (ValueError, KeyError):
+            return False
+        return bool(tree.GetBranch("bdt_score")) and tree.GetEntries() > 0
+    finally:
+        try:
+            tfile.Close()
+        except Exception:
+            pass
+
+
 def process_batch(
     files_list="files_to_process.txt",
     written_list="files_to_process_bdt.txt",
@@ -598,6 +673,10 @@ def process_batch(
     filenames to files_to_process_bdt.txt as:
 
         output.root file_type horn_current
+
+    Entries whose output file already exists and is complete (see
+    _output_already_processed) are skipped, so a failed/interrupted batch
+    run can simply be re-run to pick up where it left off.
     """
     entries = read_files_to_process(files_list)
     written_list = Path(written_list)
@@ -610,18 +689,25 @@ def process_batch(
             beam_mode = entry["beam_mode"]
             output_file = entry["output_file"]
 
-            print(
-                f"\n[{idx}/{len(entries)}] {input_file} "
-                f"({file_type}, {beam_mode}) -> {output_file}"
-            )
+            if _output_already_processed(output_file):
+                print(
+                    f"\n[{idx}/{len(entries)}] {input_file} "
+                    f"({file_type}, {beam_mode}) -> {output_file}"
+                    " [already processed, skipping]"
+                )
+            else:
+                print(
+                    f"\n[{idx}/{len(entries)}] {input_file} "
+                    f"({file_type}, {beam_mode}) -> {output_file}"
+                )
 
-            process_ntuple(
-                input_file,
-                output_file,
-                beam_mode=beam_mode,
-                max_events=max_events,
-                config_dir=config_dir,
-            )
+                process_ntuple(
+                    input_file,
+                    output_file,
+                    beam_mode=beam_mode,
+                    max_events=max_events,
+                    config_dir=config_dir,
+                )
 
             out.write(f"{output_file} {file_type} {beam_mode}\n")
             out.flush()
@@ -682,7 +768,7 @@ def process_ntuple(
     missing = []
     try:
         print("\n[1/3] Locating Pandora tree ...")
-        pandora_path, pandora_tree = find_pandora_tree(src)
+        pandora_path, pandora_tree, pandora_suffix = find_pandora_tree(src)
         print(f"Using Pandora tree: {pandora_path}")
 
         print(f"\n[2/3] Extracting features and computing BDT scores ...")
@@ -715,11 +801,13 @@ def process_ntuple(
                 target_tree_path=pandora_path,
                 score=scores,
                 max_events=max_events,
+                suffix=pandora_suffix,
             )
 
             # Track missing WireCell trees for reporting.
             for wc_path in DEFAULT_WIRECELL_TREES:
-                obj = src.Get(wc_path)
+                check_path = wc_path + pandora_suffix if pandora_suffix else wc_path
+                obj = src.Get(check_path)
                 if not (obj and obj.InheritsFrom("TTree")):
                     missing.append(wc_path)
 

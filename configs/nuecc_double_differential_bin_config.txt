@@ -1,7 +1,7 @@
 NuMICC1eNp_double_differential
 XSecAnalyzer/NuMICC1eNp
 NuMICC1eNp
-86
+87
 0 0 "is_true_signal && true_cos_opening_angle >= -1.000 && true_cos_opening_angle < -0.500 && true_elec_e >= 0.02 && true_elec_e < 0.42"
 0 0 "is_true_signal && true_cos_opening_angle >= -1.000 && true_cos_opening_angle < -0.500 && true_elec_e >= 0.42 && true_elec_e < 0.62"
 0 0 "is_true_signal && true_cos_opening_angle >= -1.000 && true_cos_opening_angle < -0.500 && true_elec_e >= 0.62 && true_elec_e < 0.82"
@@ -87,9 +87,9 @@ NuMICC1eNp
 0 2 "is_true_signal && true_elec_e >= 1.22 && true_elec_e < 7.00 && true_proton_ke >= 0.15 && true_proton_ke < 0.20"
 0 2 "is_true_signal && true_elec_e >= 1.22 && true_elec_e < 7.00 && true_proton_ke >= 0.20 && true_proton_ke < 0.30"
 0 2 "is_true_signal && true_elec_e >= 1.22 && true_elec_e < 7.00 && true_proton_ke >= 0.30 && true_proton_ke < 0.80"
-1 -1 "!is_true_signal"
+1 -1 "!is_true_signal && category != 11"
+1 -1 "category == 11"
 86
-88
 0 0 "sel_nue_cc && reco_opening_angle >= -1.000 && reco_opening_angle < -0.500 && reco_electron_energy >= 0.02 && reco_electron_energy < 0.42"
 0 0 "sel_nue_cc && reco_opening_angle >= -1.000 && reco_opening_angle < -0.500 && reco_electron_energy >= 0.42 && reco_electron_energy < 0.62"
 0 0 "sel_nue_cc && reco_opening_angle >= -1.000 && reco_opening_angle < -0.500 && reco_electron_energy >= 0.62 && reco_electron_energy < 0.82"
@@ -175,6 +175,4 @@ NuMICC1eNp
 0 2 "sel_nue_cc && reco_electron_energy >= 1.22 && reco_electron_energy < 7.00 && reco_track_energy >= 0.15 && reco_track_energy < 0.20"
 0 2 "sel_nue_cc && reco_electron_energy >= 1.22 && reco_electron_energy < 7.00 && reco_track_energy >= 0.20 && reco_track_energy < 0.30"
 0 2 "sel_nue_cc && reco_electron_energy >= 1.22 && reco_electron_energy < 7.00 && reco_track_energy >= 0.30 && reco_track_energy < 0.80"
-1 -1 "sel_nue_cc && (reco_opening_angle == 9999 || reco_electron_energy == 9999)"
-1 -1 "sel_nue_cc && (reco_opening_angle == 9999 || reco_track_energy == 9999)"
-1 -1 "sel_nue_cc && (reco_electron_energy == 9999 || reco_track_energy == 9999)"
+1 -1 "sel_nue_cc && (reco_opening_angle == 9999 || reco_electron_energy == 9999 || reco_track_energy == 9999)"

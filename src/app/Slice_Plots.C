@@ -1,5 +1,6 @@
 // Standard library includes
 #include <algorithm>
+#include <cstdlib>
 
 // ROOT includes
 #include "TAxis.h"
@@ -61,6 +62,28 @@ namespace {
     stat_err_hist->SetFillStyle( 3004 );
   }
 
+  // Derives the reco-bin-index groups needed by
+  // SystematicsCalculator::enable_detvar_smoothing() from a SliceBinning
+  // configuration: one group per Slice, listing the reco bins that make up
+  // that 1D projection in bin order.
+  std::vector< std::vector<size_t> > build_detvar_smoothing_groups(
+    const SliceBinning& sb )
+  {
+    std::vector< std::vector<size_t> > groups;
+    for ( const auto& slice : sb.slices_ ) {
+      std::vector<size_t> group;
+      // bin_map_ keys are 1-based histogram bins in order; each value is
+      // the (already-sorted) set of contributing reco-bin indices.
+      for ( const auto& bin_pair : slice.bin_map_ ) {
+        for ( size_t reco_bin_idx : bin_pair.second ) {
+          group.push_back( reco_bin_idx );
+        }
+      }
+      if ( !group.empty() ) groups.push_back( group );
+    }
+    return groups;
+  }
+
 } // anonymous namespace
 
 void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::string SLICE_Config, std::string Univ_Output, std::string Plot_OutputDir) {
@@ -106,6 +129,17 @@ void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::
 
   auto& syst = *syst_ptr;
 
+  auto* sb_ptr = new SliceBinning( SLICE_Config );
+  auto& sb = *sb_ptr;
+
+  // Opt-in smoothing of the detector-variation systematic universes, to
+  // tame low-MC-statistics noise (see SystematicsCalculator.hh). Off by
+  // default; set XSEC_DETVAR_SMOOTHING to enable.
+  if ( std::getenv( "XSEC_DETVAR_SMOOTHING" ) ) {
+    syst.enable_detvar_smoothing( build_detvar_smoothing_groups( sb ) );
+    std::cout << "DetVar smoothing ENABLED (XSEC_DETVAR_SMOOTHING set)\n";
+  }
+
   // Get access to the relevant histograms owned by the SystematicsCalculator
   // object. These contain the reco bin counts that we need to populate the
   // slices below.
@@ -135,8 +169,64 @@ void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::
   auto* matrix_map_ptr = syst.get_covariances().release();
   auto& matrix_map = *matrix_map_ptr;
 
-  auto* sb_ptr = new SliceBinning( SLICE_Config );
-  auto& sb = *sb_ptr;
+  // --- Raw CV-vs-variation values for each individual DetVar, computed
+  // once here (not per slice, since evaluate_observable() loops over every
+  // true bin for every reco bin -- expensive to redo per slice), covering
+  // both the unsmoothed and smoothed states regardless of whether
+  // XSEC_DETVAR_SMOOTHING was set for this run. Unlike the covariance-based
+  // breakdowns above, this comparison always shows both states so you
+  // never need to rerun the script to see "before vs after".
+  const std::vector< std::pair<std::string, NFT> > detvar_universe_types = {
+    { "detVarLYdown", NFT::kDetVarMCLYdown },
+    { "detVarLYrayl", NFT::kDetVarMCLYrayl },
+    { "detVarLYatten", NFT::kDetVarMCLYatten },
+    { "detVarRecomb2", NFT::kDetVarMCRecomb2 },
+    { "detVarSCE", NFT::kDetVarMCSCE },
+    { "detVarWMAngleXZ", NFT::kDetVarMCWMAngleXZ },
+    { "detVarWMAngleYZ", NFT::kDetVarMCWMAngleYZ },
+    { "detVarWMX", NFT::kDetVarMCWMX },
+    { "detVarWMYZ", NFT::kDetVarMCWMYZ },
+  };
+
+  auto build_raw_array = [&]( const Universe& univ ) {
+    size_t num_cm_bins = syst.get_covariance_matrix_size();
+    std::vector<double> arr( num_cm_bins, 0. );
+    for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
+      arr[rb] = syst.evaluate_observable( univ, rb );
+    }
+    return arr;
+  };
+
+  auto raw_plot_smoothing_groups = build_detvar_smoothing_groups( sb );
+
+  std::map< std::string, std::vector<double> > raw_unsmoothed;
+  std::map< std::string, std::vector<double> > raw_smoothed;
+
+  bool have_detvar_cv = syst.detvar_universes_.count( NFT::kDetVarMCCV ) != 0;
+  if ( !have_detvar_cv ) {
+    std::cout << "\nWarning: no detVarCV universe found in this file --"
+      " skipping the raw CV-vs-variation DetVar comparison plot.\n";
+  }
+  else {
+    const Universe& cv_univ = *syst.detvar_universes_.at( NFT::kDetVarMCCV );
+    raw_unsmoothed[ "detVarCV" ] = build_raw_array( cv_univ );
+    raw_smoothed[ "detVarCV" ] = raw_unsmoothed.at( "detVarCV" );
+    SystematicsCalculator::smooth_values_using_groups(
+      raw_smoothed.at( "detVarCV" ), raw_plot_smoothing_groups );
+
+    for ( const auto& dv : detvar_universe_types ) {
+      if ( !syst.detvar_universes_.count( dv.second ) ) {
+        std::cout << "  Skipping " << dv.first
+          << " in the raw comparison plot: universe not found in this file.\n";
+        continue;
+      }
+      const Universe& var_univ = *syst.detvar_universes_.at( dv.second );
+      raw_unsmoothed[ dv.first ] = build_raw_array( var_univ );
+      raw_smoothed[ dv.first ] = raw_unsmoothed.at( dv.first );
+      SystematicsCalculator::smooth_values_using_groups(
+        raw_smoothed.at( dv.first ), raw_plot_smoothing_groups );
+    }
+  }
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
 
@@ -233,7 +323,18 @@ void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::
     // in this vector.
     const std::vector< std::string > cov_mat_keys = { "PredTotal",
       "detVar_total", "flux", "reint", "xsec_total", "POT", "numTargets",
-      "MCstats", "EXTstats", "BNBstats"
+      "MCstats", "EXTstats", "BNBstats",
+      "detVarLYdown", "detVarLYrayl", "detVarLYatten", "detVarRecomb2",
+      "detVarSCE", "detVarWMAngleXZ", "detVarWMAngleYZ", "detVarWMX",
+      "detVarWMYZ"
+    };
+
+    // Subset of the above used for the dedicated individual-DetVar
+    // breakdown plot below (detVar_total is included for reference).
+    const std::vector< std::string > detvar_breakdown_keys = {
+      "detVar_total", "detVarLYdown", "detVarLYrayl", "detVarLYatten",
+      "detVarRecomb2", "detVarSCE", "detVarWMAngleXZ", "detVarWMAngleYZ",
+      "detVarWMX", "detVarWMYZ"
     };
 
     // Loop over the various systematic uncertainties
@@ -298,6 +399,15 @@ void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::
       // We already plotted the "total" one above
       if ( name == "PredTotal" ) continue;
 
+      // The individual DetVar systematics are reserved for their own
+      // dedicated breakdown plot below (detVar_total, their sum, still
+      // belongs on this combined plot).
+      bool is_individual_detvar = name != "detVar_total"
+        && std::find( detvar_breakdown_keys.cbegin(),
+             detvar_breakdown_keys.cend(), name )
+           != detvar_breakdown_keys.cend();
+      if ( is_individual_detvar ) continue;
+
       lg2->AddEntry( hist, name.c_str(), "l" );
       hist->Draw( "same hist" );
 
@@ -313,6 +423,168 @@ void tutorial_slice_plots(std::string FPM_Config, std::string SYST_Config, std::
     PlotFileName = Plot_OutputDir + "/" + Plot_Prefix + Form("_%i",FileNameCounter) + Plot_Suffix;
     c2->SaveAs(PlotFileName.c_str());
     FileNameCounter += 1;
+
+    // Dedicated breakdown of the individual DetVar systematics (rather than
+    // just their sum, detVar_total). Lets us check whether the DetVars
+    // expected to matter more for a given slice actually stand out, or
+    // whether they've all just been shrunk to a smaller, still-noise-
+    // dominated level by the smoothing.
+    TCanvas* c3 = new TCanvas;
+    TLegend* lg3 = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+    auto* detvar_total_hist = frac_uncertainty_hists.at( "detVar_total" );
+    detvar_total_hist->SetStats( false );
+    detvar_total_hist->GetYaxis()->SetRangeUser( 0.,
+      detvar_total_hist->GetMaximum() * 1.05 );
+    detvar_total_hist->SetLineColor( kBlack );
+    detvar_total_hist->SetLineWidth( 3 );
+    detvar_total_hist->Draw( "hist" );
+
+    lg3->AddEntry( detvar_total_hist, "detVar_total", "l" );
+
+    std::cout << "detVar_total frac err in bin #1 = "
+      << detvar_total_hist->GetBinContent( 1 )*100. << "%\n";
+
+    for ( const auto& name : detvar_breakdown_keys ) {
+      // Already plotted above
+      if ( name == "detVar_total" ) continue;
+
+      TH1* hist = frac_uncertainty_hists.at( name );
+      lg3->AddEntry( hist, name.c_str(), "l" );
+      hist->Draw( "same hist" );
+
+      std::cout << "  " << name << " frac err in bin #1 = "
+        << hist->GetBinContent( 1 )*100. << "%\n";
+    }
+
+    lg3->Draw( "same" );
+
+    PlotFileName = Plot_OutputDir + "/" + Plot_Prefix + Form("_%i",FileNameCounter) + Plot_Suffix;
+    c3->SaveAs(PlotFileName.c_str());
+    FileNameCounter += 1;
+
+    // Raw CV-vs-variation values (not a derived uncertainty or covariance
+    // matrix) for each individual DetVar, overlaid, baseline vs. smoothed
+    // side by side -- lets you check whether smoothing visibly reshapes
+    // the actual distributions, not just their derived uncertainties.
+    if ( have_detvar_cv ) {
+
+      TCanvas* c4 = new TCanvas;
+      c4->Divide( 2, 1 );
+      TLegend* lg4 = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+      // Projects a raw (full-reco-space) array into this slice's binning
+      // via the existing SliceHistogram machinery (nullptr covariance --
+      // we only want values here, not error bars).
+      auto project_to_slice = [&]( const std::vector<double>& arr,
+        const std::string& hist_name ) -> TH1* {
+        TH1D raw_hist( hist_name.c_str(), "",
+          (int)arr.size(), 0., (double)arr.size() );
+        for ( size_t rb = 0u; rb < arr.size(); ++rb ) {
+          raw_hist.SetBinContent( rb + 1, arr[rb] );
+        }
+        SliceHistogram* sh = SliceHistogram::make_slice_histogram(
+          raw_hist, slice, nullptr );
+        return sh->hist_.get();
+      };
+
+      // Fixed color per DetVar (same scheme as the breakdown above) so the
+      // same DetVar has the same color in both the baseline and smoothed
+      // pads, and matches the rest of this file's style.
+      std::map< std::string, int > detvar_colors;
+      {
+        int color = 0;
+        for ( const auto& dv : detvar_universe_types ) {
+          if ( color <= 9 ) ++color;
+          if ( color == 5 ) ++color;
+          if ( color >= 10 ) color += 10;
+          detvar_colors[ dv.first ] = color;
+        }
+      }
+
+      // Build every histogram for both pads first (without drawing), so we
+      // can find the shared maximum and put both pads on identical y-axes
+      // before anything is actually drawn.
+      struct PadHist { TH1* hist; int pad; bool is_cv; bool is_ref; std::string dv_name; };
+      std::vector< PadHist > pad_hists;
+      double shared_max = 0.;
+
+      for ( int pad = 1; pad <= 2; ++pad ) {
+        const auto& raw_map = ( pad == 1 ) ? raw_unsmoothed : raw_smoothed;
+        const std::string pad_label = ( pad == 1 ) ? "baseline" : "smoothed";
+
+        TH1* cv_slice_hist = project_to_slice( raw_map.at( "detVarCV" ),
+          "detvarcv_raw_" + pad_label + Form( "_%zu", sl_idx ) );
+        pad_hists.push_back( { cv_slice_hist, pad, true, false, "" } );
+        shared_max = std::max( shared_max, cv_slice_hist->GetMaximum() );
+
+        // The smoothed pad's CV curve above is the internal working copy
+        // used only to compute the covariance numerator -- it never feeds
+        // the actual reported prediction (see reco_mc_plus_ext_hist, built
+        // straight from syst.cv_universe().hist_reco_, never smoothed).
+        // Overlay the always-unsmoothed CV as a dashed reference so it's
+        // visually obvious the true prediction hasn't moved.
+        if ( pad == 2 ) {
+          TH1* cv_ref_hist = project_to_slice( raw_unsmoothed.at( "detVarCV" ),
+            "detvarcv_ref_" + pad_label + Form( "_%zu", sl_idx ) );
+          pad_hists.push_back( { cv_ref_hist, pad, false, true, "" } );
+          shared_max = std::max( shared_max, cv_ref_hist->GetMaximum() );
+        }
+
+        for ( const auto& dv : detvar_universe_types ) {
+          if ( !raw_map.count( dv.first ) ) continue;
+
+          TH1* var_slice_hist = project_to_slice( raw_map.at( dv.first ),
+            dv.first + "_raw_" + pad_label + Form( "_%zu", sl_idx ) );
+          pad_hists.push_back( { var_slice_hist, pad, false, false, dv.first } );
+          shared_max = std::max( shared_max, var_slice_hist->GetMaximum() );
+        }
+      }
+
+      shared_max *= 1.05;
+
+      for ( int pad = 1; pad <= 2; ++pad ) {
+        const std::string pad_label = ( pad == 1 ) ? "baseline" : "smoothed";
+        c4->cd( pad );
+
+        bool first_in_pad = true;
+        for ( auto& ph : pad_hists ) {
+          if ( ph.pad != pad ) continue;
+
+          if ( ph.is_cv ) {
+            ph.hist->SetStats( false );
+            ph.hist->SetTitle(
+              ( "Raw DetVar CV/variation (" + pad_label + ")" ).c_str() );
+            ph.hist->GetYaxis()->SetRangeUser( 0., shared_max );
+            ph.hist->SetLineColor( kBlack );
+            ph.hist->SetLineWidth( 3 );
+            ph.hist->Draw( first_in_pad ? "hist" : "same hist" );
+            if ( pad == 1 ) lg4->AddEntry( ph.hist, "detVarCV", "l" );
+          }
+          else if ( ph.is_ref ) {
+            ph.hist->SetLineColor( kBlack );
+            ph.hist->SetLineStyle( kDashed );
+            ph.hist->SetLineWidth( 2 );
+            ph.hist->Draw( first_in_pad ? "hist" : "same hist" );
+            lg4->AddEntry( ph.hist, "detVarCV (unsmoothed reference)", "l" );
+          }
+          else {
+            ph.hist->SetLineColor( detvar_colors.at( ph.dv_name ) );
+            ph.hist->SetLineWidth( 2 );
+            ph.hist->Draw( first_in_pad ? "hist" : "same hist" );
+            if ( pad == 1 ) lg4->AddEntry( ph.hist, ph.dv_name.c_str(), "l" );
+          }
+          first_in_pad = false;
+        }
+      }
+
+      c4->cd( 1 );
+      lg4->Draw( "same" );
+
+      PlotFileName = Plot_OutputDir + "/" + Plot_Prefix + Form("_%i",FileNameCounter) + Plot_Suffix;
+      c4->SaveAs(PlotFileName.c_str());
+      FileNameCounter += 1;
+    }
 
   } // slices
 

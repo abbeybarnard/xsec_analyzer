@@ -1,24 +1,3 @@
-# The columns are now:
-# file_name file_type beam_mode [triggers POT (for data only)]
-# For the MC files, the POT is calculated automatically!
-
-#############################################################################################
-
-# Run 4b
-# Intrinsic overlay 
-/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4b_NuMI_RHC_nue_overlay_surprise_v10_04_07_09_reco2_hist.root nueMC RHC
-# Standard overlay 
-/pnfs/uboone/persistent/users/uboonepro/surprise/retuple/NuMI/checkout_MCC9.10_Run4b_v10_04_07_20_NuMI_RHC_nu_overlay_patch_retuple_retuple_hist.root numuMC RHC
-# Beam on
-# Beam off
-/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4b_NuMI_beam_off_RHC_data_surprise_v10_04_07_09_reco2_hist.root extBNB RHC
-# Dirt
-/pnfs/uboone/persistent/users/uboonepro/surprise/run4b_full_samples/wc_processed/NuMI/checkout_MCC9.10_Run4a4c_NuMI_RHC_dirt_overlay_surprise_reco2_hist_4b.root dirtMC RHC 
-
-#############################################################################################
-
-# Detvars
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/checkout_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_cv_surprise_reco2_hist.root detVarCV RHC
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyd_surprise_reco2_hist.root detVarLYdown RHC
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyr_surprise_reco2_hist.root detVarLYrayl RHC
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lya_surprise_reco2_hist.root detVarLYatten RHC
@@ -28,5 +7,3 @@
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMYZ_surprise_reco2_hist.root detVarWMYZ RHC
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaXZ_surprise_reco2_hist.root detVarWMAngleXZ RHC
 /pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaYZ_surprise_reco2_hist.root detVarWMAngleYZ RHC
-
-#############################################################################################

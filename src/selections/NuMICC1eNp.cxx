@@ -614,6 +614,7 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
     { "NC Other",               8 },
     { "Out FV",                 9 },
     { "Unknown",               10 },
+    { "Dirt",                  11 },
   };
   auto cat_it = cat_to_int.find( cat );
   int cat_int = ( cat_it != cat_to_int.end() ) ? cat_it->second : 0;
@@ -748,6 +749,12 @@ bool NuMICC1eNp::is_selected( AnalysisEvent& ev ) {
 //////////////////////////////////////////////////////////////////////////////////
 
 std::string NuMICC1eNp::categorize_event( AnalysisEvent& ev ) {
+
+  // Dirt events (interaction vertex entirely outside the cryostat) get their
+  // own category, checked before any truth-branch reads below -- otherwise
+  // they fall through the FV check purely by geometry and land in "Out FV",
+  // indistinguishable from genuine in-cryostat-but-outside-FV overlay events.
+  if ( file_type_ == "dirtMC" ) return "Dirt";
 
   int nu_pdg, ccnc, nproton, npion, npi0;
   float nu_x, nu_y, nu_z, Ee;

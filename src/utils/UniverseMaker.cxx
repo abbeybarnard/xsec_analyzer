@@ -100,6 +100,16 @@ void UniverseMaker::prepare_formulas() {
   reco_bin_formulas_.clear();
   category_formulas_.clear();
 
+  // SystematicsCalculator::evaluate_observable()'s MCFullCorrCategory
+  // handling matches a true bin's cut string against the literal text
+  // "category == N" (see the exact string comparison there). That text also
+  // needs to work as an actual TTreeFormula here, since true bin cuts are
+  // compiled directly against input_chain_ below -- "category" isn't a real
+  // branch, so alias it to the actual per-event-category branch for the
+  // selection in use.
+  input_chain_.SetAlias( "category",
+    ( sel_for_categories_->name() + "_EventCategory" ).c_str() );
+
   // Create one TTreeFormula for each true bin definition
   for ( size_t tb = 0u; tb < true_bins_.size(); ++tb ) {
     const auto& bin_def = true_bins_.at( tb );

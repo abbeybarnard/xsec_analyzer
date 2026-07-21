@@ -14,13 +14,13 @@
 # /exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_MCC9.10_Run4a4c_NuMI_RHC_dirt_overlay_surprise_reco2_hist_4b_bdt_weighted.root 1 dirtMC
 #############################################################################################
 # Detvars
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/checkout_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_cv_surprise_reco2_hist.root 1 detVarCV
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyd_surprise_reco2_hist.root 1 detVarLYdown
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyr_surprise_hist.root 1 detVarLYrayl
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lya_surprise_reco2_hist.root 1 detVarLYatten
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_recomb2_surprise_hist.root 1 detVarRecomb2
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_sce_surprise_hist.root 1 detVarSCE
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMX_surprise_hist.root 1 detVarWMX
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMYZ_surprise_hist.root 1 detVarWMYZ
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaXZ_surprise_hist.root 1 detVarWMAngleXZ
-/pnfs/uboone/persistent/users/uboonepro/surprise/detvar/NuMI/run4_RHC/merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaYZ_surprise_hist.root 1 detVarWMAngleYZ
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-checkout_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_cv_surprise_reco2_hist_bdt_weighted.root 1 detVarCV
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyd_surprise_reco2_hist_bdt_weighted.root 1 detVarLYdown
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lyr_surprise_reco2_hist_bdt_weighted.root 1 detVarLYrayl
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_lya_surprise_reco2_hist_bdt_weighted.root 1 detVarLYatten
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_recomb2_surprise_reco2_hist_bdt_weighted.root 1 detVarRecomb2
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_sce_surprise_reco2_hist_bdt_weighted.root 1 detVarSCE
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMX_surprise_reco2_hist_bdt_weighted.root 1 detVarWMX
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMYZ_surprise_reco2_hist_bdt_weighted.root 1 detVarWMYZ
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaXZ_surprise_reco2_hist_bdt_weighted.root 1 detVarWMAngleXZ
+/exp/uboone/data/users/abarnard/analysis/selection_output/xsec-ana-merge_det_DetVar_Run45_v10_04_07_19_NuMI_RHC_nu_overlay_WMthetaYZ_surprise_reco2_hist_bdt_weighted.root 1 detVarWMAngleYZ

@@ -161,6 +161,24 @@ class SystematicsCalculator {
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
+    // Opt-in smoothing of the detector-variation ("DV") systematic universes
+    // before differencing them against the CV universe. Each inner vector in
+    // *reco_bin_groups* lists the reco-bin indices belonging to one 1D
+    // projection (e.g. from a SliceBinning configuration) -- smoothing is
+    // applied within each group independently, never across groups. Off by
+    // default; call this to turn it on.
+    void enable_detvar_smoothing(
+      const std::vector< std::vector<size_t> >& reco_bin_groups );
+
+    // Applies the same smoothing kernel used internally for the DV
+    // covariance calculation to an arbitrary array of per-reco-bin values,
+    // restricted (independently) to the index groups in *groups* -- e.g.
+    // for applying identical smoothing to raw values pulled directly via
+    // evaluate_observable(), such as for diagnostic plotting. Static since
+    // it depends on no per-instance state.
+    static void smooth_values_using_groups( std::vector<double>& arr,
+      const std::vector< std::vector<size_t> >& groups );
+
     // Returns a background-subtracted measurement in all ordinary reco bins
     // with the total covariance matrix and the background event counts that
     // were subtracted.
@@ -316,4 +334,9 @@ class SystematicsCalculator {
     // std::unique_ptr< SelectionBase > sel_for_categ_;
     // FIXME: using normal pointer to avoid invalid pointer error
     SelectionBase *sel_for_categ_;
+
+    // Set via enable_detvar_smoothing(). When true, detvar_smoothing_groups_
+    // is applied to the DV systematic's universes before differencing.
+    bool detvar_smoothing_enabled_ = false;
+    std::vector< std::vector<size_t> > detvar_smoothing_groups_;
 };

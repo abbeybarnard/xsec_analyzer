@@ -236,6 +236,13 @@ SystematicsCalculator::SystematicsCalculator(
 
 }
 
+void SystematicsCalculator::enable_detvar_smoothing(
+  const std::vector< std::vector<size_t> >& reco_bin_groups )
+{
+  detvar_smoothing_groups_ = reco_bin_groups;
+  detvar_smoothing_enabled_ = true;
+}
+
 void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 
   const auto& fpm = FilePropertiesManager::Instance();
@@ -1070,10 +1077,52 @@ CovMatrix SystematicsCalculator::make_covariance_matrix(
   return result;
 }
 
+// Smooths *arr* in place, restricted (independently, group by group) to
+// the entries at the indices listed in each inner vector of *groups*,
+// using a small fixed 1D kernel with edge-replicate padding. Used to tame
+// low-MC-statistics noise in detector-variation universes (see
+// enable_detvar_smoothing()). Each group must list indices in the order
+// they should be treated as adjacent samples along the smoothed (1D
+// projection) axis. Exposed publicly (rather than kept as a make_cov_mat-
+// local implementation detail) so other code can apply identical
+// smoothing to raw values pulled directly via evaluate_observable(), e.g.
+// for diagnostic plotting -- there is exactly one copy of this kernel
+// math, so the two use sites can never drift apart.
+void SystematicsCalculator::smooth_values_using_groups( std::vector<double>& arr,
+  const std::vector< std::vector<size_t> >& groups )
+{
+  static const std::vector<double> kernel{ 0.1, 0.3, 1.0, 0.3, 0.1 };
+  double ksum = 0.;
+  for ( double k : kernel ) ksum += k;
+  int half = static_cast<int>( kernel.size() ) / 2;
+
+  for ( const auto& group : groups ) {
+    int n = static_cast<int>( group.size() );
+    if ( n == 0 ) continue;
+
+    std::vector<double> vals( n );
+    for ( int i = 0; i < n; ++i ) vals[i] = arr.at( group[i] );
+
+    std::vector<double> smoothed( n, 0. );
+    for ( int i = 0; i < n; ++i ) {
+      double acc = 0.;
+      for ( int k = -half; k <= half; ++k ) {
+        // Edge-replicate padding: clamp the source index into [0, n-1]
+        int src = std::min( std::max( i + k, 0 ), n - 1 );
+        acc += kernel.at( k + half ) * vals[ src ];
+      }
+      smoothed[i] = acc / ksum;
+    }
+
+    for ( int i = 0; i < n; ++i ) arr.at( group[i] ) = smoothed[i];
+  }
+}
+
 template < class UniversePointerContainer >
   void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
   const Universe& cv_univ, const UniversePointerContainer& universes,
-  bool average_over_universes, bool is_flux_variation )
+  bool average_over_universes, bool is_flux_variation,
+  const std::vector< std::vector<size_t> >* smoothing_groups = nullptr )
 {
   // Get the total number of true bins and the covariance matrix dimension for
   // later reference
@@ -1085,6 +1134,10 @@ template < class UniversePointerContainer >
 
   for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
     cv_reco_obs.at( rb ) = sc.evaluate_observable( cv_univ, rb );
+  }
+
+  if ( smoothing_groups ) {
+    SystematicsCalculator::smooth_values_using_groups( cv_reco_obs, *smoothing_groups );
   }
 
   // Loop over universes
@@ -1107,6 +1160,10 @@ template < class UniversePointerContainer >
     for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
       univ_reco_obs.at( rb ) = sc.evaluate_observable( *univ,
         rb, flux_u_idx );
+    }
+
+    if ( smoothing_groups ) {
+      SystematicsCalculator::smooth_values_using_groups( univ_reco_obs, *smoothing_groups );
     }
 
     // We have all the needed ingredients to get the contribution of this
@@ -1151,14 +1208,15 @@ template < class UniversePointerContainer >
 void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
   const Universe& cv_univ,
   const Universe& alt_univ, bool average_over_universes = false,
-  bool is_flux_variation = false )
+  bool is_flux_variation = false,
+  const std::vector< std::vector<size_t> >* smoothing_groups = nullptr )
 {
   std::vector< const Universe* > temp_univ_vec;
 
   temp_univ_vec.emplace_back( &alt_univ );
 
   make_cov_mat( sc, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
-    is_flux_variation );
+    is_flux_variation, smoothing_groups );
 }
 
 std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
@@ -1320,8 +1378,11 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
         }
       }
 
+      const std::vector< std::vector<size_t> >* smoothing_groups
+        = detvar_smoothing_enabled_ ? &detvar_smoothing_groups_ : nullptr;
+
       make_cov_mat( *this, temp_cov_mat, *detVar_cv_u,
-        *detVar_alt_u, false, false );
+        *detVar_alt_u, false, false, smoothing_groups );
     } // DV type
 
     else if ( type == "RW" || type == "FluxRW" ) {

@@ -54,6 +54,7 @@ SHARED_OBJECTS := $(SHARED_SOURCES:.cxx=.o)
 all: $(SHARED_LIB) bin/ProcessNTuples bin/univmake bin/SlicePlots \
     bin/Unfolder bin/BinScheme bin/StandaloneUnfold bin/xsroot bin/xsnotebook \
     bin/AddFakeWeights bin/AddBeamlineGeometryWeights bin/UnfolderNuMI \
+    bin/DetVarCovarianceComparison \
     compiledb
 
 debug: all
@@ -88,6 +89,9 @@ bin/univmake: src/app/univmake.C $(SHARED_LIB)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
 
 bin/SlicePlots: src/app/Slice_Plots.C $(SHARED_LIB)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
+
+bin/DetVarCovarianceComparison: src/app/DetVarCovarianceComparison.C $(SHARED_LIB)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
 
 bin/Unfolder: src/app/Unfolder.C $(SHARED_LIB)
